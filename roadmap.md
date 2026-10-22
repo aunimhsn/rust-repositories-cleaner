@@ -12,7 +12,7 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 
 ## Steps
 
-- [ ] **1. Config and local files**: read and write `config.toml`, add `config.example.toml`, ignore `/config.toml` and `/logs` in `.gitignore`.
+- [x] **1. Config and local files**: read and write `config.toml`, add `config.example.toml`, ignore `/config.toml` and `/logs` in `.gitignore`.
 - [ ] **2. Translations**: `Language` type with English and French messages.
 - [ ] **3. GitHub access**: check `gh` and the `delete_repo` scope, fetch the repository list.
 - [ ] **4. Main menu and scope menu.**

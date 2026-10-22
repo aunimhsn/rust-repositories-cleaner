@@ -14,6 +14,15 @@ See [specs.md](specs.md) for the full specifications.
   gh auth refresh -s delete_repo
   ```
 
+## Configuration
+
+The application reads and writes its files in the current directory, so run it from the project directory:
+
+- `config.toml`: interface language and protected repositories, created with default values on first run. See [config.example.toml](config.example.toml) for the available options.
+- `logs/deletions.log`: history of the deletions.
+
+Both are ignored by Git.
+
 ## Build
 
 ```sh
