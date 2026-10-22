@@ -22,6 +22,37 @@
 - Never commit or push directly to `main`.
 - For each task, create a dedicated branch from `main`, commit and push only on that branch.
 - Every change must go through a pull request targeting `main`.
+- Name branches `<type>/<short-description>` in kebab-case, using the commit types below (e.g. `feat/translations`, `fix/config-write`).
+
+## Commit messages
+
+Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/). Pull request titles use the same format.
+
+```
+<type>(<optional scope>): <description>
+
+<optional body: what and why>
+
+<optional footer>
+```
+
+| Type | Use for |
+|---|---|
+| `feat` | A new feature for the user. |
+| `fix` | A bug fix. |
+| `docs` | Documentation only (`README.md`, `specs.md`, `roadmap.md`, `CLAUDE.md`, doc comments). |
+| `style` | Formatting with no code change. |
+| `refactor` | A code change that neither fixes a bug nor adds a feature. |
+| `perf` | A performance improvement. |
+| `test` | Adding or fixing tests only. |
+| `build` | Build system or dependencies (`Cargo.toml`, `Cargo.lock`). |
+| `ci` | CI configuration (`.github/`). |
+| `chore` | Other maintenance (tooling, `.gitignore`, Claude Code agents). |
+| `revert` | Reverting a previous commit. |
+
+- Scope: optional, the module or area concerned (e.g. `feat(config): ...`, `fix(github): ...`).
+- Description: imperative mood, lowercase, no final period, 72 characters max (e.g. `feat(config): save config.toml atomically`).
+- Breaking change: add `!` after the type or scope (e.g. `feat(config)!: ...`) and explain it in a `BREAKING CHANGE:` footer.
 
 ## Code review
 
