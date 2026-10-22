@@ -14,7 +14,8 @@
 ## Language
 
 - Everything in the project (code, identifiers, comments, documentation, commit messages) must be written in English.
-- Exception: the French translations of the user interface strings (see the Language feature in `specs.md`). Only the translated strings themselves are in French; the code around them stays in English.
+- Exception: the French translations of the user interface strings (see the Language feature in `specs.md`), in `i18n/fr/messages.ftl`. Only the translated strings and their comments are in French; the code stays in English.
+- User interface texts are never hard-coded: add each message to every `i18n/<language>/messages.ftl` file (English is the reference) and read it with the `fl!` macro.
 - Exception: the code review notes in `outputs/` are written in French.
 
 ## Git workflow

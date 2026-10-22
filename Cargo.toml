@@ -12,6 +12,9 @@ keywords = ["github", "repository", "cleanup", "cli", "tui"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+i18n-embed = { version = "0.16.0", features = ["fluent-system"] }
+i18n-embed-fl = "0.10.1"
+rust-embed = "8.13.0"
 serde = { version = "1.0.229", features = ["derive"] }
 tempfile = "3.27.0"
 thiserror = "2.0.21"
@@ -27,3 +30,6 @@ pedantic = { level = "warn", priority = -1 }
 lto = true
 codegen-units = 1
 strip = true
+
+[dev-dependencies]
+fluent-syntax = "0.12.0"

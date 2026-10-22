@@ -1,0 +1,9 @@
+# Configuration of the Fluent translations, read by i18n-embed at compile time.
+
+# Reference language: every message must exist in it.
+fallback_language = "en"
+
+[fluent]
+# Translations are stored in `i18n/<language>/messages.ftl`.
+assets_dir = "i18n"
+domain = "messages"

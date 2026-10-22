@@ -33,6 +33,7 @@ Only run read-only commands (`git diff`, `git log`, `cargo clippy`, `cargo test`
 - **Tests**: missing cases, edge cases, test clarity.
 - **Conformity**: behavior matches `specs.md`, conventions match `CLAUDE.md`.
 - **Dependencies**: necessity and features of new crates.
+- **Translations** (when a file in `i18n/` changes): wording consistency between languages (same meaning, same tone), consistent vocabulary (for example always "dépôt" for repository in French), grammatical agreement and plural variants, French typography (space before `?`, `!`, `:`), and placeholders (`{ $name }`) present in every language. Key parity between languages is already checked by a test: do not report it.
 
 Do not report style issues already enforced by `rustfmt` or Clippy. Do not invent problems: if the code is good, say so.
 

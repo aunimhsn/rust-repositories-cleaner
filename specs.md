@@ -11,6 +11,8 @@ The expected volume is a few hundred repositories (around 330 today).
 - Minimalist, clean and sober interface that goes straight to the point.
 - A short plain-text title only: no ASCII art banner, no emoji.
 - Colors are used sparingly, only to convey meaning (red for deletion, green for protection, gray for disabled).
+- Each screen shows a one-line key hint at the bottom (for example `↑/↓ move · Space mark · Enter delete · Esc cancel`).
+- A short message is shown while loading the repositories ("Loading repositories…") and while deleting them ("Deleting repositories… 3/10").
 
 ## GitHub access
 
@@ -40,7 +42,7 @@ When the application starts, it displays a short title and a main menu:
 3. **Language**
 4. **Quit**
 
-The user selects an entry to open it. After any action completes, the application returns to this main menu.
+The user selects an entry with `↑` / `↓` and `Enter`. `Esc` does nothing in the main menu: the **Quit** entry exits the application. After any action completes, the application returns to this main menu.
 
 ## Scope menu
 
@@ -139,9 +141,9 @@ The size reported by GitHub is approximate and can lag behind the latest pushes.
 
 ### Confirmation
 
-- After validating, the application lists all the marked repositories, then asks: "Do you really want to delete these N repositories? [y/N]"
+- After validating, the application lists all the marked repositories, then asks: "Do you really want to delete these N repositories? [y/N]" ("Do you really want to delete this repository? [y/N]" when only one is marked).
 - The answer defaults to **No**: pressing `Enter` alone cancels the deletion.
-- The selected repositories are deleted only if the user answers `y`.
+- The selected repositories are deleted only if the user answers `y` (`o` for "oui" in the French interface, shown as `[o/N]`), in lowercase or uppercase.
 
 ### Results
 
@@ -154,7 +156,10 @@ The size reported by GitHub is approximate and can lag behind the latest pushes.
 ## Feature 3: Language
 
 - The user chooses the interface language: **English** (default) or **French**.
+- `Enter` applies the selected language and returns to the main menu; `Esc` returns to the main menu without changing it.
 - The choice is saved in `config.toml` and kept between runs.
+- Language names are written in their own language in the menu: `English`, `Français`.
+- The log file is always written in English, whatever the interface language, so it can be read back reliably.
 
 ## Feature 4: Quit
 
