@@ -90,7 +90,7 @@ Each repository is displayed on its own line with:
 | Visibility label | `public` or `private`. |
 | Status labels | `fork` if the repository is a fork, `archived` if it is archived. |
 | Size | Human-readable size (`KB`, `MB`, `GB`), as reported by GitHub. |
-| Last update | The date of the last update, in absolute format (`2026-10-22`). |
+| Last update | The date of the last push (or of the creation if there was none), in absolute format (`2026-10-22`). |
 
 The size reported by GitHub is approximate and can lag behind the latest pushes.
 
@@ -180,4 +180,6 @@ All files are read and written relative to the **current directory**, so the app
 | Situation | Behavior |
 |---|---|
 | `gh` is not installed, the user is not logged in, or the `delete_repo` scope is missing | Display a clear message with the command to run (for example `gh auth refresh -s delete_repo`), then exit. |
-| Network error while loading the list | Display the error and return to the main menu. |
+| GitHub request error at startup, while checking the access (network, server, revoked token) | Display the error given by `gh`, then exit: the main menu is not shown yet. |
+| GitHub request error while loading the list (network, server, permissions) | Display the error given by `gh` and return to the main menu. |
+| Unexpected response from `gh` | Display the error and return to the main menu. |

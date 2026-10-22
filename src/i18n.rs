@@ -17,6 +17,7 @@ use i18n_embed::unic_langid::LanguageIdentifier;
 use i18n_embed::{I18nEmbedError, LanguageLoader};
 use rust_embed::RustEmbed;
 
+use crate::github::GitHubError;
 use crate::language::Language;
 
 pub use i18n_embed_fl::fl;
@@ -47,6 +48,24 @@ pub fn load(language: Language) -> Result<FluentLanguageLoader, I18nEmbedError> 
 pub fn confirms_deletion(loader: &FluentLanguageLoader, key: char) -> bool {
     let confirmation_key = fl!(loader, "confirmation-key");
     key.to_lowercase().eq(confirmation_key.chars())
+}
+
+/// Translated message of a GitHub error.
+#[must_use]
+pub fn github_error_message(loader: &FluentLanguageLoader, error: &GitHubError) -> String {
+    match error {
+        GitHubError::GhNotInstalled => fl!(loader, "error-gh-not-installed"),
+        GitHubError::NotLoggedIn => fl!(loader, "error-gh-not-logged-in"),
+        GitHubError::MissingDeleteScope => fl!(loader, "error-missing-delete-scope"),
+        GitHubError::Request(details) => fl!(loader, "error-request", details = details.as_str()),
+        GitHubError::UnexpectedResponse(details) => {
+            fl!(
+                loader,
+                "error-unexpected-response",
+                details = details.as_str()
+            )
+        }
+    }
 }
 
 /// Language identifier of `language`, used to find its Fluent file.
@@ -327,5 +346,42 @@ mod tests {
             ),
             "3 supprimés, 2 échecs. Voir le journal\u{a0}: logs/deletions.log"
         );
+    }
+
+    #[test]
+    fn github_errors_are_translated_with_their_details() {
+        let error = GitHubError::Request("HTTP 401: Bad credentials".to_owned());
+
+        assert_eq!(
+            github_error_message(&english(), &error),
+            "GitHub request failed: HTTP 401: Bad credentials"
+        );
+        assert_eq!(
+            github_error_message(&french(), &error),
+            "La requête à GitHub a échoué\u{a0}: HTTP 401: Bad credentials"
+        );
+    }
+
+    #[test]
+    fn every_github_error_has_a_message_in_every_language() {
+        let errors = [
+            GitHubError::GhNotInstalled,
+            GitHubError::NotLoggedIn,
+            GitHubError::MissingDeleteScope,
+            GitHubError::Request("details".to_owned()),
+            GitHubError::UnexpectedResponse("details".to_owned()),
+        ];
+
+        for language in Language::ALL {
+            let loader = load(language).unwrap();
+            for error in &errors {
+                let message = github_error_message(&loader, error);
+
+                assert!(
+                    !message.is_empty() && !message.contains('{'),
+                    "{language:?}: {error:?}"
+                );
+            }
+        }
     }
 }

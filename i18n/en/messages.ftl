@@ -66,4 +66,5 @@ press-any-key = Press any key to return to the menu
 error-gh-not-installed = GitHub CLI (gh) is not installed. Install it from https://cli.github.com/
 error-gh-not-logged-in = You are not logged in to GitHub CLI. Run: gh auth login
 error-missing-delete-scope = The GitHub CLI token is missing the delete_repo scope. Run: gh auth refresh -s delete_repo
-error-network = Cannot reach GitHub: { $details }
+error-request = GitHub request failed: { $details }
+error-unexpected-response = Unexpected response from GitHub CLI: { $details }
