@@ -1,0 +1,10 @@
+# Example configuration of rust-repositories-cleaner.
+# The application creates config.toml with these default values on first run.
+
+# Interface language: "en" (English) or "fr" (French).
+language = "en"
+
+# Repositories that can never be marked for deletion.
+protected = [
+    "rust-repositories-cleaner",
+]
