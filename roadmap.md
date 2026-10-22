@@ -8,12 +8,12 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 |---|---|---|
 | Console interface | `ratatui` with `crossterm` | Reference TUI library in Rust: scrolling lists, colors, live header. |
 | GitHub access | Call `gh api` from Rust | `gh` already handles the token, pagination and errors; no HTTP client or async code needed. |
-| Translations | `Language` enum with one function per message, no library | The compiler guarantees every message exists in both languages; plurals are handled in code. |
+| Translations | [Fluent](https://projectfluent.org/) files in `i18n/<language>/messages.ftl`, read with `i18n-embed` and its `fl!` macro | Texts are separated from the code and plurals follow each language's rules. `fl!` checks at compile time that each message and its arguments exist in English, and a test checks that every language has the same messages. |
 
 ## Steps
 
 - [x] **1. Config and local files**: read and write `config.toml`, add `config.example.toml`, ignore `/config.toml` and `/logs` in `.gitignore`.
-- [ ] **2. Translations**: `Language` type with English and French messages.
+- [x] **2. Translations**: English and French Fluent files, loader and key parity test.
 - [ ] **3. GitHub access**: check `gh` and the `delete_repo` scope, fetch the repository list.
 - [ ] **4. Main menu and scope menu.**
 - [ ] **5. Protection list.**
