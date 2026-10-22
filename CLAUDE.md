@@ -30,3 +30,9 @@
   - `cargo test --all-features`
 - The same checks run in CI (`.github/workflows/ci.yml`) on every pull request.
 - `unsafe` code is forbidden and Clippy pedantic lints are enabled (see `[lints]` in `Cargo.toml`).
+
+## Roadmap
+
+- At the start of each session, read `roadmap.md` to know the progress; when asked to continue, resume at the first unchecked step.
+- Each step is delivered in its own pull request, which checks the step's box in `roadmap.md`.
+- Keep `roadmap.md` consistent with `specs.md` when the specifications change.
