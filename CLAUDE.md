@@ -24,6 +24,7 @@
 - For each task, create a dedicated branch from `main`, commit and push only on that branch.
 - Every change must go through a pull request targeting `main`.
 - Name branches `<type>/<short-description>` in kebab-case, using the commit types below (e.g. `feat/translations`, `fix/config-write`).
+- Never switch branches in the main project directory while the owner may be testing a branch there (for example with `cargo run`): it would change the code they run. Work on any other branch in a separate Git worktree outside the project (`git worktree add <directory> -b <branch> origin/main`), and remove it with `git worktree remove <directory>` once the work is pushed.
 
 ## Commit messages
 
