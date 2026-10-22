@@ -3,7 +3,8 @@ use std::process::ExitCode;
 
 use rust_repositories_cleaner::config::{CONFIG_FILE, Config};
 use rust_repositories_cleaner::github::GitHub;
-use rust_repositories_cleaner::i18n::{self, fl, github_error_message};
+use rust_repositories_cleaner::i18n::{self, github_error_message};
+use rust_repositories_cleaner::tui;
 
 fn main() -> ExitCode {
     match run() {
@@ -15,27 +16,13 @@ fn main() -> ExitCode {
     }
 }
 
-/// Temporary entry point until the menus exist: checks the GitHub access and
-/// prints the number of repositories.
+/// Loads the configuration and checks the GitHub access before showing the
+/// menus: these errors are printed and end the application.
 fn run() -> Result<(), String> {
-    let config = Config::load_or_create(Path::new(CONFIG_FILE))
-        .map_err(|error| format!("Error: {error}"))?;
+    let config_path = Path::new(CONFIG_FILE);
+    let config = Config::load_or_create(config_path).map_err(|error| format!("Error: {error}"))?;
     let loader = i18n::load(config.language).map_err(|error| format!("Error: {error}"))?;
-
     let github = GitHub::connect().map_err(|error| github_error_message(&loader, &error))?;
-    println!("{}", fl!(loader, "loading-repositories"));
-    let repositories = github
-        .repositories()
-        .map_err(|error| github_error_message(&loader, &error))?;
 
-    let protected = repositories
-        .iter()
-        .filter(|repository| config.protected.contains(&repository.name))
-        .count();
-    println!(
-        "{} · {}",
-        fl!(loader, "repository-count", count = repositories.len()),
-        fl!(loader, "protected-count", count = protected)
-    );
-    Ok(())
+    tui::run(config, config_path, loader, &github).map_err(|error| format!("Error: {error}"))
 }

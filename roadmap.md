@@ -15,8 +15,8 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 - [x] **1. Config and local files**: read and write `config.toml`, add `config.example.toml`, ignore `/config.toml` and `/logs` in `.gitignore`.
 - [x] **2. Translations**: English and French Fluent files, loader and key parity test.
 - [x] **3. GitHub access**: check `gh` and the `delete_repo` scope, fetch the repository list.
-- [ ] **4. Main menu and scope menu.**
+- [x] **4. Main menu and scope menu**, with the language menu.
 - [ ] **5. Protection list.**
-- [ ] **6. Deletion list**: confirmation, deletion and log.
+- [ ] **6. Deletion list**: confirmation, deletion with a progress bar (`ratatui` `LineGauge`), and log.
   - Before testing for real, add the `delete_repo` scope to the owner's `gh` token (approved by the owner, only when needed): run `gh auth refresh -h github.com -s delete_repo` in the background and give the owner the one-time code to enter at https://github.com/login/device.
 - [ ] **7. "Since last deletion" filter**: last deletion date read from the log.

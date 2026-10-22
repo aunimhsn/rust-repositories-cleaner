@@ -60,33 +60,43 @@ impl Repository {
     }
 }
 
-/// Connection to GitHub, checked to be able to list and delete repositories.
+/// Connection to GitHub, checked to be able to list repositories.
 #[derive(Debug)]
 pub struct GitHub {
     login: String,
 }
 
 impl GitHub {
-    /// Checks that `gh` is installed, logged in and has the `delete_repo` scope.
+    /// Checks that `gh` is installed and logged in.
+    ///
+    /// The `delete_repo` scope is not required here: it is only checked by
+    /// [`GitHub::check_delete_scope`] before deleting.
     ///
     /// # Errors
     ///
     /// Returns an error if one of these checks fails or GitHub cannot be reached.
     pub fn connect() -> Result<Self, GitHubError> {
-        let output = gh(&["api", "--include", "user"])?;
-        if output.status.code() == Some(NOT_LOGGED_IN_EXIT_CODE) {
-            return Err(GitHubError::NotLoggedIn);
-        }
-
-        let output = successful(output)?;
+        let output = user_response()?;
         let response = parse_include_output(&output)?;
-        if !has_delete_scope(response.headers) {
-            return Err(GitHubError::MissingDeleteScope);
-        }
-
         let user: User = serde_json::from_str(response.body)
             .map_err(|error| GitHubError::UnexpectedResponse(error.to_string()))?;
         Ok(Self { login: user.login })
+    }
+
+    /// Checks that the token has the `delete_repo` scope.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitHubError::MissingDeleteScope`] if the scope is missing, or
+    /// another error if GitHub cannot be reached.
+    pub fn check_delete_scope(&self) -> Result<(), GitHubError> {
+        let output = user_response()?;
+        let response = parse_include_output(&output)?;
+        if has_delete_scope(response.headers) {
+            Ok(())
+        } else {
+            Err(GitHubError::MissingDeleteScope)
+        }
     }
 
     /// Login of the authenticated user.
@@ -119,6 +129,15 @@ impl GitHub {
 #[derive(Deserialize)]
 struct User {
     login: String,
+}
+
+/// Fetches the authenticated user with its HTTP headers, which list the token scopes.
+fn user_response() -> Result<String, GitHubError> {
+    let output = gh(&["api", "--include", "user"])?;
+    if output.status.code() == Some(NOT_LOGGED_IN_EXIT_CODE) {
+        return Err(GitHubError::NotLoggedIn);
+    }
+    successful(output)
 }
 
 /// Runs `gh` with `arguments` and returns its output, whatever its exit status.
