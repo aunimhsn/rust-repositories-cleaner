@@ -39,12 +39,18 @@ new-repository-count = { $count ->
    *[other] { $count } new repositories since { $since }
 }
 
+## Sizes
+
+size-kilobytes = { $size } KB
+size-megabytes = { $size } MB
+size-gigabytes = { $whole }.{ $tenth } GB
+
 ## Key hints, shown at the bottom of each screen
 
 hint-main-menu = ↑/↓ move · Enter select
 hint-submenu = ↑/↓ move · Enter select · Esc back
-hint-protection = ↑/↓ move · Space protect · Enter save · Esc cancel
-hint-deletion = ↑/↓ move · Space mark · Enter delete · Esc cancel
+hint-protection = ↑/↓ move · Shift+↑/↓ jump · Ctrl+↑/↓ first/last · Space protect · Enter save · Esc cancel
+hint-deletion = ↑/↓ move · Shift+↑/↓ jump · Ctrl+↑/↓ first/last · Space mark · Enter delete · Esc cancel
 
 ## Deletion
 

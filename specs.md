@@ -11,7 +11,7 @@ The expected volume is a few hundred repositories (around 330 today).
 - Minimalist, clean and sober interface that goes straight to the point.
 - A short plain-text title only: no ASCII art banner, no emoji.
 - Colors are used sparingly, only to convey meaning (red for deletion, green for protection, gray for disabled).
-- Each screen shows a one-line key hint at the bottom (for example `↑/↓ move · Space mark · Enter delete · Esc cancel`).
+- Each screen shows a key hint at the bottom, wrapped on two lines in narrow terminals (for example `↑/↓ move · Space mark · Enter delete · Esc cancel`).
 - A short message is shown while waiting for GitHub ("Checking permissions…", "Loading repositories…"). Keys pressed while waiting are ignored.
 
 ## GitHub access
@@ -71,7 +71,8 @@ The protection and deletion lists share the same format:
 - Forks and archived repositories are included.
 - Sorted alphabetically by name.
 - No search or filter.
-- The list scrolls when it is taller than the terminal.
+- The list scrolls when it is taller than the terminal, and shows as many repositories as the terminal height allows.
+- The cursor stays in the middle of the visible rows, so the repositories before and after it are always visible; only at the ends of the list does it move towards the edge.
 
 ### Header
 
@@ -92,7 +93,7 @@ Each repository is displayed on its own line with:
 | Name | The repository name. |
 | Visibility label | `public` or `private`. |
 | Status labels | `fork` if the repository is a fork, `archived` if it is archived. |
-| Size | Human-readable size (`KB`, `MB`, `GB`), as reported by GitHub. |
+| Size | Human-readable size, as reported by GitHub: whole `KB` or `MB`, `GB` with one decimal (`Ko`, `Mo`, `Go` in French). |
 | Last update | The date of the last push (or of the creation if there was none), in absolute format (`2026-10-22`). |
 
 The size reported by GitHub is approximate and can lag behind the latest pushes.
@@ -109,6 +110,8 @@ The size reported by GitHub is approximate and can lag behind the latest pushes.
 | Key | Action |
 |---|---|
 | `↑` / `↓` | Move through the list. |
+| `Shift + ↑` / `Shift + ↓` | Jump 5 repositories up or down (also `PgUp` / `PgDn`). |
+| `Ctrl + ↑` / `Ctrl + ↓` | Go to the first or last repository (also `Home` / `End`). |
 | `Space` | Toggle protection on the current repository. |
 | `Enter` | Save the protections and return to the main menu. |
 | `Esc` | Return to the main menu without saving the changes. |
@@ -135,6 +138,8 @@ The size reported by GitHub is approximate and can lag behind the latest pushes.
 | Key | Action |
 |---|---|
 | `↑` / `↓` | Move through the list. |
+| `Shift + ↑` / `Shift + ↓` | Jump 5 repositories up or down (also `PgUp` / `PgDn`). |
+| `Ctrl + ↑` / `Ctrl + ↓` | Go to the first or last repository (also `Home` / `End`). |
 | `Space` | Toggle the mark on the current repository (no effect on protected repositories). |
 | `Enter` | Validate the selection. |
 | `Esc` | Return to the main menu without deleting anything. |

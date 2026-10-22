@@ -18,6 +18,18 @@ The application reads and writes its files in the current directory, so run it f
 
 Both are ignored by Git.
 
+## Keyboard shortcuts
+
+| Keys | Action |
+|---|---|
+| `↑` / `↓` | Move |
+| `Shift + ↑` / `Shift + ↓` (or `PgUp` / `PgDn`) | Jump 5 repositories |
+| `Ctrl + ↑` / `Ctrl + ↓` (or `Home` / `End`) | First or last repository |
+| `Space` | Protect, or mark for deletion |
+| `Enter` | Validate |
+| `Esc` | Go back or cancel |
+| `Ctrl + C` | Quit from any screen |
+
 ## Build
 
 ```sh
