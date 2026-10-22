@@ -7,12 +7,7 @@ See [specs.md](specs.md) for the full specifications.
 ## Requirements
 
 - Rust 1.93 or later (stable toolchain, see `rust-toolchain.toml`)
-- [GitHub CLI](https://cli.github.com/) (`gh`), logged in with the `delete_repo` scope:
-
-  ```sh
-  gh auth login
-  gh auth refresh -s delete_repo
-  ```
+- [GitHub CLI](https://cli.github.com/) (`gh`), logged in, with the `delete_repo` scope to delete repositories. See [docs/github-cli-setup.md](docs/github-cli-setup.md) for a step-by-step setup.
 
 ## Configuration
 
@@ -22,6 +17,18 @@ The application reads and writes its files in the current directory, so run it f
 - `logs/deletions.log`: history of the deletions.
 
 Both are ignored by Git.
+
+## Keyboard shortcuts
+
+| Keys | Action |
+|---|---|
+| `↑` / `↓` | Move |
+| `Shift + ↑` / `Shift + ↓` (or `PgUp` / `PgDn`) | Jump 5 repositories |
+| `Ctrl + ↑` / `Ctrl + ↓` (or `Home` / `End`) | First or last repository |
+| `Space` | Protect, or mark for deletion |
+| `Enter` | Validate |
+| `Esc` | Go back or cancel |
+| `Ctrl + C` | Quit from any screen |
 
 ## Build
 

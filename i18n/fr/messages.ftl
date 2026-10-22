@@ -43,12 +43,18 @@ new-repository-count = { $count ->
    *[other] { $count } nouveaux dépôts depuis le { $since }
 }
 
+## Tailles
+
+size-kilobytes = { $size } Ko
+size-megabytes = { $size } Mo
+size-gigabytes = { $whole },{ $tenth } Go
+
 ## Aide des touches, affichée en bas de chaque écran
 
 hint-main-menu = ↑/↓ naviguer · Entrée valider
 hint-submenu = ↑/↓ naviguer · Entrée valider · Échap retour
-hint-protection = ↑/↓ naviguer · Espace protéger · Entrée enregistrer · Échap annuler
-hint-deletion = ↑/↓ naviguer · Espace marquer · Entrée supprimer · Échap annuler
+hint-protection = ↑/↓ naviguer · Maj+↑/↓ sauter · Ctrl+↑/↓ début/fin · Espace protéger · Entrée enregistrer · Échap annuler
+hint-deletion = ↑/↓ naviguer · Maj+↑/↓ sauter · Ctrl+↑/↓ début/fin · Espace marquer · Entrée supprimer · Échap annuler
 
 ## Suppression
 
