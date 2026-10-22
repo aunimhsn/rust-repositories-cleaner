@@ -3,13 +3,13 @@ name = "rust-repositories-cleaner"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.93"
-description = "A command-line tool to clean Rust repositories."
+description = "A minimalist console application to protect and bulk delete your GitHub repositories."
 authors = ["Aunim HASSAN"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/aunimhsn/rust-repositories-cleaner"
 readme = "README.md"
-keywords = ["cargo", "cli", "clean", "target"]
-categories = ["command-line-utilities", "development-tools::cargo-plugins"]
+keywords = ["github", "repository", "cleanup", "cli", "tui"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 
