@@ -14,6 +14,7 @@
 ## Language
 
 - Everything in the project (code, identifiers, comments, documentation, commit messages) must be written in English.
+- Exception: the French translations of the user interface strings (see the Language feature in `specs.md`). Only the translated strings themselves are in French; the code around them stays in English.
 
 ## Git workflow
 
