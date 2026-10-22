@@ -14,12 +14,20 @@
 ## Language
 
 - Everything in the project (code, identifiers, comments, documentation, commit messages) must be written in English.
+- Exception: the French translations of the user interface strings (see the Language feature in `specs.md`). Only the translated strings themselves are in French; the code around them stays in English.
+- Exception: the code review notes in `outputs/` are written in French.
 
 ## Git workflow
 
 - Never commit or push directly to `main`.
 - For each task, create a dedicated branch from `main`, commit and push only on that branch.
 - Every change must go through a pull request targeting `main`.
+
+## Code review
+
+- Before opening any pull request that changes code (`src/`, tests, `Cargo.toml`), run the `code-reviewer` subagent (`.claude/agents/code-reviewer.md`) on the branch.
+- It writes its recommendations, in French, to `outputs/<YYYY-MM-DD>-<branch>-code-review.md`. These notes are ignored by Git.
+- Summarize the recommendations to the user and apply only the ones they approve, then open the pull request.
 
 ## Development
 
