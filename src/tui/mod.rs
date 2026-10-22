@@ -1,5 +1,6 @@
 //! Terminal user interface: event loop running the menus.
 
+mod deletion;
 mod format;
 mod keymap;
 mod list;
@@ -7,17 +8,21 @@ mod render;
 mod state;
 
 use std::collections::BTreeSet;
+use std::fs::TryLockError;
 use std::io;
 use std::path::Path;
 use std::time::Duration;
 
 use i18n_embed::fluent::FluentLanguageLoader;
+use jiff::Timestamp;
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEventKind};
 
+use self::deletion::MissingLine;
 use self::state::{Action, Effect, Scope, State};
 use crate::config::Config;
-use crate::github::GitHub;
+use crate::deletion_log::{self, LOG_FILE};
+use crate::github::{GitHub, GitHubError};
 use crate::i18n::{self, fl, github_error_message};
 use crate::language::Language;
 
@@ -32,8 +37,27 @@ pub fn run(
     loader: FluentLanguageLoader,
     github: &GitHub,
 ) -> io::Result<()> {
+    let mut state = State::new(config.language, i18n::confirmation_key(&loader), None);
+    // A deletion session cut short (application killed, terminal closed…) is
+    // recorded as interrupted, and the user is told at once.
+    match deletion_log::close_unfinished_session(Path::new(LOG_FILE), Timestamp::now()) {
+        Ok(Some(session)) => {
+            let mut message = fl!(loader, "previous-session-interrupted", path = LOG_FILE);
+            if let Some(repository) = session.pending {
+                message.push('\n');
+                message.push_str(&fl!(
+                    loader,
+                    "previous-session-pending",
+                    repository = repository
+                ));
+            }
+            state.show_message(message);
+        }
+        Ok(None) => {}
+        Err(error) => state.show_message(fl!(loader, "error-log", details = error.to_string())),
+    }
     let mut app = App {
-        state: State::new(config.language, None),
+        state,
         config,
         config_path,
         loader,
@@ -72,15 +96,17 @@ impl App<'_> {
                     discard_pending_events()?;
                 }
                 Some(Effect::ChangeLanguage(language)) => self.change_language(language),
-                Some(Effect::OpenList(Action::Protect, scope)) => {
+                Some(Effect::OpenList(action, scope)) => {
                     self.state
                         .show_loading(fl!(self.loader, "loading-repositories"));
                     self.draw(terminal)?;
-                    self.open_protection_list(scope);
+                    self.open_list(action, scope);
                     discard_pending_events()?;
                 }
-                // The deletion list comes with the next roadmap step.
-                Some(Effect::OpenList(Action::Delete, _)) => self.state.show_main_menu(),
+                Some(Effect::DeleteRepositories(names)) => {
+                    self.delete(&names, terminal);
+                    discard_pending_events()?;
+                }
                 Some(Effect::SaveProtections(protected)) => self.save_protections(protected),
             }
         }
@@ -100,16 +126,109 @@ impl App<'_> {
         }
     }
 
-    fn open_protection_list(&mut self, scope: Scope) {
+    fn open_list(&mut self, action: Action, scope: Scope) {
         match self.github.repositories() {
             Ok(repositories) => {
-                self.state
-                    .open_protection_list(repositories, self.config.protected.clone(), scope);
+                let protected = self.config.protected.clone();
+                match action {
+                    Action::Protect => {
+                        self.state
+                            .open_protection_list(repositories, protected, scope);
+                    }
+                    Action::Delete => self
+                        .state
+                        .open_deletion_list(repositories, protected, scope),
+                }
             }
             Err(error) => self
                 .state
                 .show_message(github_error_message(&self.loader, &error)),
         }
+    }
+
+    /// Deletes the repositories confirmed by the user, showing the progress,
+    /// then shows the summary. `Esc` or `Ctrl + C` stops after the current one.
+    fn delete(&mut self, names: &[String], terminal: &mut DefaultTerminal) {
+        let mut log = match deletion_log::open(Path::new(LOG_FILE)) {
+            Ok(log) => log,
+            Err(error) => {
+                let message = fl!(self.loader, "error-log", details = error.to_string());
+                self.state.show_message(message);
+                return;
+            }
+        };
+        // The lock, released when `log` is dropped, keeps another instance
+        // from writing to the log or closing this session as interrupted.
+        match log.try_lock() {
+            Ok(()) => {}
+            Err(TryLockError::WouldBlock) => {
+                self.state.show_message(fl!(self.loader, "log-in-use"));
+                return;
+            }
+            Err(TryLockError::Error(error)) => {
+                let message = fl!(self.loader, "error-log", details = error.to_string());
+                self.state.show_message(message);
+                return;
+            }
+        }
+
+        let github = self.github;
+        let loader = &self.loader;
+        let state = &mut self.state;
+        let result = deletion::delete_all(
+            names,
+            github.login(),
+            |name| github.delete_repository(name).map_err(failure_reason),
+            &mut log,
+            Timestamp::now,
+            |done, total| {
+                state.show_deletion_progress(done, total);
+                // A progress frame that cannot be drawn must not interrupt the
+                // deletions: the next frame or the summary will be drawn again.
+                let _ = terminal.draw(|frame| render::draw(frame, state, loader));
+            },
+            stop_requested,
+        );
+
+        let (summary, error) = match result {
+            Ok(summary) => (summary, None),
+            Err(error) => (error.summary, Some((error.missing, error.source))),
+        };
+        let mut lines = Vec::new();
+        if let Some((_, source)) = &error {
+            lines.push(fl!(self.loader, "error-log", details = source.to_string()));
+        }
+        lines.push(fl!(
+            self.loader,
+            "deletion-summary",
+            deleted = summary.deleted,
+            failed = summary.failed,
+            path = LOG_FILE
+        ));
+        if summary.not_processed > 0 {
+            lines.push(fl!(
+                self.loader,
+                "deletion-untouched",
+                count = summary.not_processed
+            ));
+        }
+        match error.map(|(missing, _)| missing) {
+            Some(MissingLine::Result(repository)) => {
+                lines.push(fl!(
+                    self.loader,
+                    "log-missing-result",
+                    repository = repository
+                ));
+            }
+            Some(MissingLine::End) => lines.push(fl!(self.loader, "log-missing-end")),
+            // The other repositories were not deleted: they are counted as untouched.
+            _ => {}
+        }
+
+        if let Some(last_deleted_at) = summary.last_deleted_at {
+            self.state.set_last_deletion(last_deleted_at);
+        }
+        self.state.show_message(lines.join("\n"));
     }
 
     /// Saves the protected repositories. Nothing changes if saving fails.
@@ -129,7 +248,8 @@ impl App<'_> {
             Ok((config, loader)) => {
                 self.config = config;
                 self.loader = loader;
-                self.state.set_language(language);
+                self.state
+                    .set_language(language, i18n::confirmation_key(&self.loader));
             }
             Err(details) => {
                 let message = fl!(self.loader, "error-config-save", details = details);
@@ -171,6 +291,31 @@ fn with_protections(
     };
     config.save(path).map_err(|error| error.to_string())?;
     Ok(config)
+}
+
+/// Reason of a failed deletion for the log: GitHub's message, without prefix.
+fn failure_reason(error: GitHubError) -> String {
+    match error {
+        GitHubError::Request(details) => details,
+        error => error.to_string(),
+    }
+}
+
+/// Returns whether the user pressed `Esc` or `Ctrl + C` to stop the deletions.
+/// Other keys pressed meanwhile are dropped.
+fn stop_requested() -> bool {
+    let mut stop = false;
+    while let Ok(true) = event::poll(Duration::ZERO) {
+        if let Ok(Event::Key(key)) = event::read()
+            && key.kind == KeyEventKind::Press
+        {
+            stop |= matches!(
+                keymap::command(key),
+                keymap::Command::Back | keymap::Command::Quit
+            );
+        }
+    }
+    stop
 }
 
 /// Drops the keys pressed while the interface was blocked, so that they do not

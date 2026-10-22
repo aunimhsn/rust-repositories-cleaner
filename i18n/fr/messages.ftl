@@ -68,6 +68,7 @@ confirm-deletion = { $count ->
 }
 # Touche qui confirme la suppression, en minuscule. Également affichée dans la question ci-dessus.
 confirmation-key = o
+more-repositories = … et { $count } de plus
 deletion-progress = Suppression des dépôts… { $done }/{ $total }
 deletion-summary = { $deleted ->
         [one] { $deleted } supprimé
@@ -76,6 +77,7 @@ deletion-summary = { $deleted ->
         [one] { $failed } échec
        *[other] { $failed } échecs
     }. Voir le journal : { $path }
+hint-deletion-progress = Échap arrêter après le dépôt en cours
 press-any-key = Appuyez sur une touche pour revenir au menu
 
 ## Erreurs
@@ -86,3 +88,13 @@ error-missing-delete-scope = Le token de la GitHub CLI n'a pas le scope delete_r
 error-request = La requête à GitHub a échoué : { $details }
 error-unexpected-response = Réponse inattendue de la GitHub CLI : { $details }
 error-config-save = Impossible d'enregistrer la configuration : { $details }
+error-log = Impossible d'utiliser le journal : { $details }
+deletion-untouched = { $count ->
+    [one] { $count } dépôt n'a pas été touché.
+   *[other] { $count } dépôts n'ont pas été touchés.
+}
+log-missing-result = { $repository } a été traité mais son résultat manque dans le journal : vérifiez-le sur GitHub.
+log-missing-end = Tous les dépôts ont été traités, mais la fin de la session n'a pas pu être inscrite dans le journal.
+log-in-use = Une autre instance de l'application est en train de supprimer des dépôts. Réessayez une fois qu'elle aura terminé.
+previous-session-interrupted = La session de suppression précédente a été interrompue avant la fin. Elle est désormais marquée comme interrompue dans { $path }.
+previous-session-pending = { $repository } était en cours de suppression et a peut-être été supprimé : vérifiez-le sur GitHub.

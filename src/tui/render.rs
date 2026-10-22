@@ -13,7 +13,7 @@ use ratatui::widgets::{Cell, HighlightSpacing, Paragraph, Row, Table, TableState
 
 use super::format;
 use super::list::centered_offset;
-use super::state::{Action, MainEntry, ProtectionList, Scope, Screen, State};
+use super::state::{Action, DeletionList, MainEntry, ProtectionList, Scope, Screen, State};
 use crate::github::Repository;
 use crate::i18n::fl;
 use crate::language::Language;
@@ -27,6 +27,8 @@ const NO_CURSOR: &str = "  ";
 enum Body<'a> {
     Text(Text<'static>),
     ProtectionList(&'a ProtectionList),
+    DeletionList(&'a DeletionList),
+    ConfirmDeletion(&'a DeletionList),
 }
 
 /// Draws the current screen of `state`.
@@ -52,6 +54,26 @@ pub fn draw(frame: &mut Frame, state: &State, loader: &FluentLanguageLoader) {
             breadcrumb(&app_title, &fl!(loader, "menu-protect")),
             Body::ProtectionList(protection),
             fl!(loader, "hint-protection"),
+        ),
+        Screen::DeletionList(deletion) => (
+            breadcrumb(&app_title, &fl!(loader, "menu-delete")),
+            Body::DeletionList(deletion),
+            fl!(loader, "hint-deletion"),
+        ),
+        Screen::ConfirmDeletion(deletion) => (
+            breadcrumb(&app_title, &fl!(loader, "menu-delete")),
+            Body::ConfirmDeletion(deletion),
+            String::new(),
+        ),
+        &Screen::DeletionProgress { done, total } => (
+            breadcrumb(&app_title, &fl!(loader, "menu-delete")),
+            Body::Text(Text::from(fl!(
+                loader,
+                "deletion-progress",
+                done = done,
+                total = total
+            ))),
+            fl!(loader, "hint-deletion-progress"),
         ),
         Screen::Loading(message) => (
             app_title,
@@ -93,6 +115,10 @@ pub fn draw(frame: &mut Frame, state: &State, loader: &FluentLanguageLoader) {
         ),
         Body::ProtectionList(protection) => {
             draw_protection_list(frame, content_area, protection, loader);
+        }
+        Body::DeletionList(deletion) => draw_deletion_list(frame, content_area, deletion, loader),
+        Body::ConfirmDeletion(deletion) => {
+            draw_confirm_deletion(frame, content_area, deletion, loader);
         }
     }
 }
@@ -183,16 +209,158 @@ fn draw_protection_list(
 
     let table = repository_table(repositories, loader, &time_zone, |repository| {
         if protection.is_protected(repository) {
-            (
-                Span::styled("[P]", Style::new().fg(Color::Green)),
-                Style::new(),
-            )
+            RowDecoration::marker(Span::styled("[P]", Style::new().fg(Color::Green)))
         } else {
-            (Span::raw("[ ]"), Style::new())
+            RowDecoration::marker(Span::raw("[ ]"))
         }
     });
     let mut table_state = table_state(protection.list().cursor(), repositories.len(), table_area);
     frame.render_stateful_widget(table, table_area, &mut table_state);
+}
+
+fn draw_deletion_list(
+    frame: &mut Frame,
+    area: Rect,
+    deletion: &DeletionList,
+    loader: &FluentLanguageLoader,
+) {
+    let [header_area, notice_area, table_area] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(0),
+    ])
+    .areas(area);
+    let time_zone = TimeZone::system();
+    let repositories = deletion.list().repositories();
+
+    let total = match deletion.since() {
+        Some(since) => fl!(
+            loader,
+            "new-repository-count",
+            count = repositories.len(),
+            since = format::date(since, &time_zone)
+        ),
+        None => fl!(loader, "repository-count", count = repositories.len()),
+    };
+    let protected = fl!(
+        loader,
+        "protected-count",
+        count = deletion.protected_count()
+    );
+    let marked = fl!(loader, "marked-count", count = deletion.marked_count());
+    frame.render_widget(
+        Line::from(format!("{total} · {protected} · {marked}")),
+        header_area,
+    );
+    if deletion.nothing_selected() {
+        frame.render_widget(
+            Line::from(fl!(loader, "no-repository-selected")).fg(Color::Yellow),
+            notice_area,
+        );
+    }
+
+    let protected_label = fl!(loader, "label-protected");
+    let table = repository_table(repositories, loader, &time_zone, |repository| {
+        if deletion.is_protected(repository) {
+            RowDecoration {
+                marker: Span::raw("[ ]"),
+                style: Style::new().fg(Color::DarkGray),
+                label: Some(protected_label.clone()),
+            }
+        } else if deletion.is_marked(repository) {
+            RowDecoration::marker(Span::styled("[✗]", Style::new().fg(Color::Red)))
+        } else {
+            RowDecoration::marker(Span::raw("[ ]"))
+        }
+    });
+    let mut table_state = table_state(deletion.list().cursor(), repositories.len(), table_area);
+    frame.render_stateful_widget(table, table_area, &mut table_state);
+}
+
+fn draw_confirm_deletion(
+    frame: &mut Frame,
+    area: Rect,
+    deletion: &DeletionList,
+    loader: &FluentLanguageLoader,
+) {
+    let [question_area, names_area] =
+        Layout::vertical([Constraint::Length(2), Constraint::Min(0)]).areas(area);
+    let names = deletion.marked_names();
+
+    frame.render_widget(
+        Line::from(fl!(loader, "confirm-deletion", count = names.len())).bold(),
+        question_area,
+    );
+    let lines = pack_names(
+        &names,
+        usize::from(names_area.width),
+        usize::from(names_area.height),
+        |count| fl!(loader, "more-repositories", count = count),
+    );
+    frame.render_widget(
+        lines.into_iter().map(Line::from).collect::<Text>(),
+        names_area,
+    );
+}
+
+/// Packs `names` into lines of at most `width` characters, separated by commas.
+/// When they do not fit in `max_lines`, the last line ends with `more(count)`
+/// for the names left out.
+fn pack_names(
+    names: &[String],
+    width: usize,
+    max_lines: usize,
+    more: impl Fn(usize) -> String,
+) -> Vec<String> {
+    let text_width = |line: &[&str]| {
+        line.iter()
+            .map(|name| name.chars().count() + 2)
+            .sum::<usize>()
+    };
+
+    let mut lines: Vec<Vec<&str>> = Vec::new();
+    for name in names {
+        match lines.last_mut() {
+            Some(line) if text_width(line) + name.chars().count() < width => line.push(name),
+            _ => lines.push(vec![name]),
+        }
+    }
+
+    let mut left_out = 0;
+    if lines.len() > max_lines {
+        lines.truncate(max_lines.max(1));
+        let shown = |lines: &[Vec<&str>]| lines.iter().map(Vec::len).sum::<usize>();
+        // Remove names from the last line until the "more" text fits.
+        loop {
+            left_out = names.len() - shown(&lines);
+            let Some(last) = lines.last_mut() else {
+                break;
+            };
+            if last.is_empty() || text_width(last) + more(left_out).chars().count() <= width {
+                break;
+            }
+            last.pop();
+        }
+    }
+
+    let line_count = lines.len();
+    lines
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            let mut text = line.join(", ");
+            let is_last = index + 1 == line_count;
+            if is_last && left_out > 0 {
+                if !text.is_empty() {
+                    text.push_str(", ");
+                }
+                text.push_str(&more(left_out));
+            } else if !is_last {
+                text.push(',');
+            }
+            text
+        })
+        .collect()
 }
 
 /// Table state with the cursor kept in the middle of the visible rows.
@@ -201,6 +369,25 @@ fn table_state(cursor: Option<usize>, len: usize, area: Rect) -> TableState {
         centered_offset(cursor, len, usize::from(area.height))
     });
     TableState::new().with_selected(cursor).with_offset(offset)
+}
+
+/// How a row starts and looks, decided by each list.
+struct RowDecoration {
+    marker: Span<'static>,
+    /// Style of the whole row, for example gray for a row that cannot be marked.
+    style: Style,
+    /// Extra label shown before the status labels, such as `protected`.
+    label: Option<String>,
+}
+
+impl RowDecoration {
+    fn marker(marker: Span<'static>) -> Self {
+        Self {
+            marker,
+            style: Style::new(),
+            label: None,
+        }
+    }
 }
 
 /// Translated labels shown in the table, computed once per drawing.
@@ -222,24 +409,27 @@ impl Labels {
     }
 }
 
-/// Table of `repositories`. `row_marker` gives the marker that starts each
-/// row and the style of the whole row.
+/// Table of `repositories`. `decorate` gives the marker, style and extra label
+/// of each row.
 fn repository_table(
     repositories: &[Repository],
     loader: &FluentLanguageLoader,
     time_zone: &TimeZone,
-    row_marker: impl Fn(&Repository) -> (Span<'static>, Style),
+    decorate: impl Fn(&Repository) -> RowDecoration,
 ) -> Table<'static> {
     let labels = Labels::new(loader);
+    let decorations: Vec<_> = repositories.iter().map(decorate).collect();
     let columns: Vec<[String; 4]> = repositories
         .iter()
-        .map(|repository| {
+        .zip(&decorations)
+        .map(|(repository, decoration)| {
             let visibility = if repository.private {
                 &labels.private
             } else {
                 &labels.public
             };
             let status = [
+                decoration.label.as_deref(),
                 repository.fork.then_some(labels.fork.as_str()),
                 repository.archived.then_some(labels.archived.as_str()),
             ]
@@ -273,22 +463,19 @@ fn repository_table(
         width(3),
     ];
 
-    let rows =
-        repositories
-            .iter()
-            .zip(columns)
-            .map(|(repository, [visibility, status, size, date])| {
-                let (marker, style) = row_marker(repository);
-                Row::new([
-                    Cell::from(marker),
-                    Cell::from(repository.name.clone()),
-                    Cell::from(visibility).fg(Color::DarkGray),
-                    Cell::from(status).fg(Color::DarkGray),
-                    Cell::from(Line::from(size).right_aligned()),
-                    Cell::from(date),
-                ])
-                .style(style)
-            });
+    let rows = repositories.iter().zip(decorations).zip(columns).map(
+        |((repository, decoration), [visibility, status, size, date])| {
+            Row::new([
+                Cell::from(decoration.marker),
+                Cell::from(repository.name.clone()),
+                Cell::from(visibility).fg(Color::DarkGray),
+                Cell::from(status).fg(Color::DarkGray),
+                Cell::from(Line::from(size).right_aligned()),
+                Cell::from(date),
+            ])
+            .style(decoration.style)
+        },
+    );
 
     Table::new(rows, widths)
         .column_spacing(2)
@@ -348,7 +535,7 @@ mod tests {
 
     #[test]
     fn main_menu_shows_the_entries_and_the_cursor() {
-        let screen = render(&State::new(Language::English, None), Language::English);
+        let screen = render(&State::new(Language::English, 'y', None), Language::English);
 
         assert!(screen.contains("Repository Cleaner"));
         assert!(screen.contains("› Protect repositories"));
@@ -359,7 +546,7 @@ mod tests {
 
     #[test]
     fn main_menu_is_translated() {
-        let screen = render(&State::new(Language::French, None), Language::French);
+        let screen = render(&State::new(Language::French, 'o', None), Language::French);
 
         assert!(screen.contains("Nettoyeur de dépôts"));
         assert!(screen.contains("› Protéger des dépôts"));
@@ -367,7 +554,7 @@ mod tests {
 
     #[test]
     fn scope_menu_shows_a_breadcrumb_and_the_disabled_scope() {
-        let mut state = State::new(Language::English, None);
+        let mut state = State::new(Language::English, 'y', None);
         state.open_scope_menu(Action::Delete);
 
         let screen = render(&state, Language::English);
@@ -379,7 +566,7 @@ mod tests {
 
     #[test]
     fn loading_screen_has_no_hint() {
-        let mut state = State::new(Language::English, None);
+        let mut state = State::new(Language::English, 'y', None);
         state.show_loading("Checking permissions…".to_owned());
 
         let screen = render(&state, Language::English);
@@ -390,7 +577,7 @@ mod tests {
 
     #[test]
     fn protection_list_shows_the_header_markers_and_labels() {
-        let mut state = State::new(Language::English, None);
+        let mut state = State::new(Language::English, 'y', None);
         let repository = |name: &str, private, fork, archived, size_kb| Repository {
             name: name.to_owned(),
             private,
@@ -422,7 +609,7 @@ mod tests {
 
     /// Opens the protection list with `count` repositories named `repo-00`, `repo-01`…
     fn protection_with(count: usize) -> State {
-        let mut state = State::new(Language::English, None);
+        let mut state = State::new(Language::English, 'y', None);
         let repositories = (0..count)
             .map(|index| Repository {
                 name: format!("repo-{index:02}"),
@@ -479,8 +666,113 @@ mod tests {
     }
 
     #[test]
+    fn deletion_list_shows_marks_protected_rows_and_counts() {
+        let mut state = State::new(Language::English, 'y', None);
+        let repositories = ["alpha", "beta", "gamma"]
+            .map(|name| Repository {
+                name: name.to_owned(),
+                private: false,
+                fork: false,
+                archived: false,
+                size_kb: 0,
+                created_at: "2021-01-01T12:00:00Z".parse().unwrap(),
+                pushed_at: None,
+            })
+            .to_vec();
+        state.open_deletion_list(repositories, ["gamma".to_owned()].into(), Scope::All);
+        state.handle(Command::Toggle);
+
+        let screen = render(&state, Language::English);
+
+        assert!(screen.contains("3 repositories · 1 protected · 1 marked for deletion"));
+        assert!(screen.contains("› [✗]  alpha"));
+        let gamma = screen.lines().find(|line| line.contains("gamma")).unwrap();
+        assert!(gamma.contains("[ ]  gamma") && gamma.contains("protected"));
+    }
+
+    #[test]
+    fn deletion_list_warns_when_nothing_is_marked() {
+        let mut state = State::new(Language::English, 'y', None);
+        state.open_deletion_list(Vec::new(), BTreeSet::new(), Scope::All);
+        state.handle(Command::Confirm);
+
+        let screen = render(&state, Language::English);
+
+        assert!(screen.contains("No repository selected"));
+    }
+
+    #[test]
+    fn confirmation_shows_the_question_and_the_names() {
+        let mut state = protection_with(3);
+        let Screen::ProtectionList(protection) = state.screen() else {
+            unreachable!()
+        };
+        let repositories = protection.list().repositories().to_vec();
+        state.open_deletion_list(repositories, BTreeSet::new(), Scope::All);
+        state.handle(Command::Toggle);
+        state.handle(Command::Last);
+        state.handle(Command::Toggle);
+        state.handle(Command::Confirm);
+
+        let screen = render(&state, Language::English);
+
+        assert!(screen.contains("Do you really want to delete these 2 repositories? [y/N]"));
+        assert!(screen.contains("repo-00, repo-02"));
+    }
+
+    #[test]
+    fn confirmation_is_translated_with_its_key() {
+        let mut state = State::new(Language::French, 'o', None);
+        let repositories = vec![Repository {
+            name: "alpha".to_owned(),
+            private: false,
+            fork: false,
+            archived: false,
+            size_kb: 0,
+            created_at: "2021-01-01T12:00:00Z".parse().unwrap(),
+            pushed_at: None,
+        }];
+        state.open_deletion_list(repositories, BTreeSet::new(), Scope::All);
+        state.handle(Command::Toggle);
+        state.handle(Command::Confirm);
+
+        let screen = render(&state, Language::French);
+
+        assert!(screen.contains("Voulez-vous vraiment supprimer ce dépôt\u{a0}? [o/N]"));
+    }
+
+    fn names(count: usize) -> Vec<String> {
+        (0..count).map(|index| format!("repo-{index:02}")).collect()
+    }
+
+    fn more(count: usize) -> String {
+        format!("… and {count} more")
+    }
+
+    #[test]
+    fn names_are_packed_on_lines_separated_by_commas() {
+        let lines = pack_names(&names(4), 18, 10, more);
+
+        assert_eq!(lines, ["repo-00, repo-01,", "repo-02, repo-03"]);
+    }
+
+    #[test]
+    fn names_that_do_not_fit_are_counted() {
+        let lines = pack_names(&names(10), 36, 2, more);
+
+        assert_eq!(
+            lines,
+            [
+                "repo-00, repo-01, repo-02, repo-03,",
+                "repo-04, repo-05, … and 4 more"
+            ]
+        );
+        assert!(lines.iter().all(|line| line.chars().count() <= 36));
+    }
+
+    #[test]
     fn message_shows_how_to_continue() {
-        let mut state = State::new(Language::English, None);
+        let mut state = State::new(Language::English, 'y', None);
         state.show_message("Something went wrong".to_owned());
 
         let screen = render(&state, Language::English);

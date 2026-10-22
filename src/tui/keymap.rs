@@ -26,6 +26,8 @@ pub enum Command {
     Back,
     /// Quit from any screen (`Ctrl + C`).
     Quit,
+    /// A character, used to answer the deletion confirmation.
+    Char(char),
     /// Any other key, which only closes messages.
     Other,
 }
@@ -51,6 +53,10 @@ pub fn command(key: KeyEvent) -> Command {
         KeyCode::Char(' ') => Command::Toggle,
         KeyCode::Enter => Command::Confirm,
         KeyCode::Esc => Command::Back,
+        // Shift is the only modifier allowed, for uppercase letters.
+        KeyCode::Char(character) if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() => {
+            Command::Char(character)
+        }
         _ => Command::Other,
     }
 }
@@ -104,6 +110,20 @@ mod tests {
             key(KeyCode::Char('c'), KeyModifiers::CONTROL),
             Command::Quit
         );
-        assert_eq!(key(KeyCode::Char('c'), KeyModifiers::NONE), Command::Other);
+        assert_eq!(
+            key(KeyCode::Char('y'), KeyModifiers::NONE),
+            Command::Char('y')
+        );
+        assert_eq!(
+            key(KeyCode::Char('Y'), KeyModifiers::SHIFT),
+            Command::Char('Y')
+        );
+        assert_eq!(
+            key(KeyCode::Char('x'), KeyModifiers::CONTROL),
+            Command::Other
+        );
+        assert_eq!(key(KeyCode::Char('y'), KeyModifiers::ALT), Command::Other);
+        assert_eq!(key(KeyCode::Char('y'), KeyModifiers::SUPER), Command::Other);
+        assert_eq!(key(KeyCode::Char('y'), KeyModifiers::META), Command::Other);
     }
 }

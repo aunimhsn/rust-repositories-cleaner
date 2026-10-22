@@ -54,6 +54,15 @@ pub enum Screen {
     ScopeMenu(Action),
     LanguageMenu,
     ProtectionList(ProtectionList),
+    DeletionList(DeletionList),
+    /// Confirmation of the deletion of the repositories marked in the list,
+    /// which is kept to go back to it if the user cancels.
+    ConfirmDeletion(DeletionList),
+    /// Deletion in progress: number of repositories processed and total.
+    DeletionProgress {
+        done: usize,
+        total: usize,
+    },
     /// A waiting message, shown while a blocking call runs. Keys are ignored.
     Loading(String),
     /// A message, closed by any key to return to the main menu.
@@ -108,6 +117,84 @@ impl ProtectionList {
     }
 }
 
+/// List of repositories in which the user marks the ones to delete.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeletionList {
+    list: RepositoryList,
+    /// Protected repositories, which cannot be marked.
+    protected: BTreeSet<String>,
+    marked: BTreeSet<String>,
+    /// Date of the last deletion, when only the newer repositories are listed.
+    since: Option<Timestamp>,
+    /// Whether "No repository selected" is shown, until the next key.
+    nothing_selected: bool,
+}
+
+impl DeletionList {
+    #[must_use]
+    pub fn list(&self) -> &RepositoryList {
+        &self.list
+    }
+
+    #[must_use]
+    pub fn is_protected(&self, repository: &Repository) -> bool {
+        self.protected.contains(&repository.name)
+    }
+
+    #[must_use]
+    pub fn is_marked(&self, repository: &Repository) -> bool {
+        self.marked.contains(&repository.name)
+    }
+
+    /// Number of protected repositories in the list.
+    #[must_use]
+    pub fn protected_count(&self) -> usize {
+        self.list
+            .repositories()
+            .iter()
+            .filter(|repository| self.is_protected(repository))
+            .count()
+    }
+
+    #[must_use]
+    pub fn marked_count(&self) -> usize {
+        self.marked.len()
+    }
+
+    /// Names of the marked repositories, in the order of the list.
+    #[must_use]
+    pub fn marked_names(&self) -> Vec<String> {
+        self.list
+            .repositories()
+            .iter()
+            .filter(|repository| self.is_marked(repository))
+            .map(|repository| repository.name.clone())
+            .collect()
+    }
+
+    #[must_use]
+    pub fn since(&self) -> Option<Timestamp> {
+        self.since
+    }
+
+    #[must_use]
+    pub fn nothing_selected(&self) -> bool {
+        self.nothing_selected
+    }
+
+    /// Toggles the mark of the selected repository, unless it is protected.
+    fn toggle_selected(&mut self) {
+        if let Some(repository) = self.list.selected()
+            && !self.is_protected(repository)
+        {
+            let name = repository.name.clone();
+            if !self.marked.remove(&name) {
+                self.marked.insert(name);
+            }
+        }
+    }
+}
+
 /// Side effect requested by a key, run by the event loop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
@@ -120,6 +207,8 @@ pub enum Effect {
     OpenList(Action, Scope),
     /// Save the protected repositories.
     SaveProtections(BTreeSet<String>),
+    /// Delete these repositories, confirmed by the user.
+    DeleteRepositories(Vec<String>),
 }
 
 /// State of the interface.
@@ -131,17 +220,24 @@ pub struct State {
     /// Cursor in the scope or language menu.
     submenu_cursor: usize,
     language: Language,
+    /// Key that confirms the deletion in the current language, in lowercase.
+    confirmation_key: char,
     last_deletion: Option<Timestamp>,
 }
 
 impl State {
     #[must_use]
-    pub fn new(language: Language, last_deletion: Option<Timestamp>) -> Self {
+    pub fn new(
+        language: Language,
+        confirmation_key: char,
+        last_deletion: Option<Timestamp>,
+    ) -> Self {
         Self {
             screen: Screen::MainMenu,
             main_cursor: 0,
             submenu_cursor: 0,
             language,
+            confirmation_key,
             last_deletion,
         }
     }
@@ -188,15 +284,54 @@ impl State {
         protected: BTreeSet<String>,
         scope: Scope,
     ) {
-        let since = match scope {
+        self.screen = Screen::ProtectionList(ProtectionList {
+            list: self.repository_list(repositories, scope),
+            protected,
+            since: self.since(scope),
+        });
+    }
+
+    /// Opens the deletion list with the repositories of `scope`, among
+    /// `repositories`; the `protected` ones cannot be marked.
+    pub fn open_deletion_list(
+        &mut self,
+        repositories: Vec<Repository>,
+        protected: BTreeSet<String>,
+        scope: Scope,
+    ) {
+        self.screen = Screen::DeletionList(DeletionList {
+            list: self.repository_list(repositories, scope),
+            protected,
+            marked: BTreeSet::new(),
+            since: self.since(scope),
+            nothing_selected: false,
+        });
+    }
+
+    fn repository_list(&self, repositories: Vec<Repository>, scope: Scope) -> RepositoryList {
+        RepositoryList::new(in_scope(repositories, scope, self.last_deletion))
+    }
+
+    /// Date shown in the header of a list limited to the newer repositories.
+    fn since(&self, scope: Scope) -> Option<Timestamp> {
+        match scope {
             Scope::All => None,
             Scope::SinceLastDeletion => self.last_deletion,
-        };
-        self.screen = Screen::ProtectionList(ProtectionList {
-            list: RepositoryList::new(in_scope(repositories, scope, self.last_deletion)),
-            protected,
-            since,
-        });
+        }
+    }
+
+    /// Replaces the current screen by `next(screen)`.
+    fn replace_screen(&mut self, next: impl FnOnce(Screen) -> Screen) {
+        let screen = std::mem::replace(&mut self.screen, Screen::MainMenu);
+        self.screen = next(screen);
+    }
+
+    pub fn show_deletion_progress(&mut self, done: usize, total: usize) {
+        self.screen = Screen::DeletionProgress { done, total };
+    }
+
+    pub fn set_last_deletion(&mut self, last_deletion: Timestamp) {
+        self.last_deletion = Some(last_deletion);
     }
 
     pub fn open_language_menu(&mut self) {
@@ -215,8 +350,9 @@ impl State {
         self.screen = Screen::Message(message);
     }
 
-    pub fn set_language(&mut self, language: Language) {
+    pub fn set_language(&mut self, language: Language, confirmation_key: char) {
         self.language = language;
+        self.confirmation_key = confirmation_key;
     }
 
     /// Updates the state for `key` and returns the side effect to run, if any.
@@ -234,7 +370,11 @@ impl State {
             Screen::ScopeMenu(action) => self.handle_scope_menu(*action, command),
             Screen::LanguageMenu => self.handle_language_menu(command),
             Screen::ProtectionList(_) => self.handle_protection_list(command),
-            Screen::Loading(_) => None,
+            Screen::DeletionList(_) => self.handle_deletion_list(command),
+            Screen::ConfirmDeletion(_) => self.handle_confirm_deletion(command),
+            // While waiting, keys are ignored; while deleting, the event loop
+            // reads them itself to stop.
+            Screen::DeletionProgress { .. } | Screen::Loading(_) => None,
             Screen::Message(_) => {
                 self.show_main_menu();
                 None
@@ -333,6 +473,54 @@ impl State {
     }
 }
 
+impl State {
+    fn handle_deletion_list(&mut self, command: Command) -> Option<Effect> {
+        let Screen::DeletionList(deletion) = &mut self.screen else {
+            return None;
+        };
+        deletion.nothing_selected = false;
+        match command {
+            Command::Toggle => deletion.toggle_selected(),
+            Command::Confirm if deletion.marked.is_empty() => deletion.nothing_selected = true,
+            Command::Confirm => self.replace_screen(|screen| match screen {
+                Screen::DeletionList(deletion) => Screen::ConfirmDeletion(deletion),
+                screen => screen,
+            }),
+            Command::Back => self.show_main_menu(),
+            navigation => deletion.list.navigate(navigation),
+        }
+        None
+    }
+
+    fn handle_confirm_deletion(&mut self, command: Command) -> Option<Effect> {
+        let confirmed = matches!(
+            command,
+            Command::Char(character) if character.to_lowercase().eq([self.confirmation_key])
+        );
+        if confirmed && let Screen::ConfirmDeletion(deletion) = &self.screen {
+            // Protected repositories cannot be marked: filtering them again
+            // guards the irreversible deletion against any future bug.
+            let names = deletion
+                .list
+                .repositories()
+                .iter()
+                .filter(|repository| {
+                    deletion.is_marked(repository) && !deletion.is_protected(repository)
+                })
+                .map(|repository| repository.name.clone())
+                .collect();
+            return Some(Effect::DeleteRepositories(names));
+        }
+        // Enter alone, Esc or any other key means "no": back to the list,
+        // with the marks kept.
+        self.replace_screen(|screen| match screen {
+            Screen::ConfirmDeletion(deletion) => Screen::DeletionList(deletion),
+            screen => screen,
+        });
+        None
+    }
+}
+
 /// Moves `cursor` to the previous (`Up`) or next (`Down`) enabled entry,
 /// staying in place at the ends of the menu.
 fn move_cursor(cursor: usize, enabled: &[bool], command: Command) -> usize {
@@ -355,7 +543,7 @@ mod tests {
     }
 
     fn state() -> State {
-        State::new(Language::English, None)
+        State::new(Language::English, 'y', None)
     }
 
     fn select_main_entry(state: &mut State, entry: MainEntry) {
@@ -440,7 +628,7 @@ mod tests {
 
     #[test]
     fn since_last_deletion_is_enabled_after_a_deletion() {
-        let mut state = State::new(Language::English, Some(Timestamp::UNIX_EPOCH));
+        let mut state = State::new(Language::English, 'y', Some(Timestamp::UNIX_EPOCH));
         state.open_scope_menu(Action::Protect);
 
         press(&mut state, KeyCode::Down);
@@ -464,7 +652,7 @@ mod tests {
 
     #[test]
     fn language_menu_starts_on_the_current_language() {
-        let mut state = State::new(Language::French, None);
+        let mut state = State::new(Language::French, 'o', None);
         select_main_entry(&mut state, MainEntry::Language);
 
         press(&mut state, KeyCode::Enter);
@@ -601,7 +789,7 @@ mod tests {
     #[test]
     fn since_last_deletion_lists_only_newer_repositories() {
         let last_deletion: Timestamp = "2026-01-01T00:00:00Z".parse().unwrap();
-        let mut state = State::new(Language::English, Some(last_deletion));
+        let mut state = State::new(Language::English, 'y', Some(last_deletion));
         let mut newer = repository("newer");
         newer.created_at = "2026-06-01T00:00:00Z".parse().unwrap();
 
@@ -614,6 +802,156 @@ mod tests {
         let list = protection_list(&state);
         assert_eq!(list.list().repositories().len(), 1);
         assert_eq!(list.since(), Some(last_deletion));
+    }
+
+    fn open_deletion(state: &mut State, protected: &[&str]) {
+        state.open_deletion_list(
+            vec![repository("alpha"), repository("beta"), repository("gamma")],
+            protected.iter().map(|name| (*name).to_owned()).collect(),
+            Scope::All,
+        );
+    }
+
+    fn deletion_list(state: &State) -> &DeletionList {
+        match state.screen() {
+            Screen::DeletionList(deletion) | Screen::ConfirmDeletion(deletion) => deletion,
+            screen => panic!("not a deletion screen: {screen:?}"),
+        }
+    }
+
+    #[test]
+    fn space_marks_and_unmarks_a_repository() {
+        let mut state = state();
+        open_deletion(&mut state, &[]);
+
+        state.handle(Command::Toggle);
+        assert_eq!(deletion_list(&state).marked_count(), 1);
+
+        state.handle(Command::Toggle);
+        assert_eq!(deletion_list(&state).marked_count(), 0);
+    }
+
+    #[test]
+    fn protected_repositories_cannot_be_marked() {
+        let mut state = state();
+        open_deletion(&mut state, &["alpha"]);
+
+        state.handle(Command::Toggle);
+
+        assert_eq!(deletion_list(&state).marked_count(), 0);
+    }
+
+    #[test]
+    fn enter_without_mark_shows_a_notice_until_the_next_key() {
+        let mut state = state();
+        open_deletion(&mut state, &[]);
+
+        state.handle(Command::Confirm);
+        assert!(deletion_list(&state).nothing_selected());
+        assert!(matches!(state.screen(), Screen::DeletionList(_)));
+
+        state.handle(Command::Down);
+        assert!(!deletion_list(&state).nothing_selected());
+    }
+
+    #[test]
+    fn enter_with_marks_asks_for_confirmation() {
+        let mut state = state();
+        open_deletion(&mut state, &[]);
+        state.handle(Command::Down);
+        state.handle(Command::Toggle);
+        state.handle(Command::Last);
+        state.handle(Command::Toggle);
+
+        state.handle(Command::Confirm);
+
+        assert!(matches!(state.screen(), Screen::ConfirmDeletion(_)));
+        assert_eq!(deletion_list(&state).marked_names(), ["beta", "gamma"]);
+    }
+
+    fn confirm(state: &mut State) {
+        state.handle(Command::Toggle);
+        state.handle(Command::Last);
+        state.handle(Command::Toggle);
+        state.handle(Command::Confirm);
+    }
+
+    #[test]
+    fn the_confirmation_key_deletes_exactly_the_marked_repositories() {
+        let mut state = state();
+        open_deletion(&mut state, &[]);
+        confirm(&mut state);
+
+        assert_eq!(
+            state.handle(Command::Char('y')),
+            Some(Effect::DeleteRepositories(vec![
+                "alpha".to_owned(),
+                "gamma".to_owned()
+            ]))
+        );
+    }
+
+    #[test]
+    fn the_confirmation_key_works_in_uppercase() {
+        let mut state = state();
+        open_deletion(&mut state, &[]);
+        confirm(&mut state);
+
+        assert!(matches!(
+            state.handle(Command::Char('Y')),
+            Some(Effect::DeleteRepositories(_))
+        ));
+    }
+
+    #[test]
+    fn another_character_cancels_and_keeps_the_marks() {
+        let mut state = state();
+        open_deletion(&mut state, &[]);
+        confirm(&mut state);
+
+        assert_eq!(state.handle(Command::Char('n')), None);
+
+        assert!(matches!(state.screen(), Screen::DeletionList(_)));
+        assert_eq!(deletion_list(&state).marked_count(), 2);
+    }
+
+    #[test]
+    fn the_english_key_does_not_confirm_in_french() {
+        let mut state = State::new(Language::French, 'o', None);
+        open_deletion(&mut state, &[]);
+        confirm(&mut state);
+
+        assert_eq!(state.handle(Command::Char('y')), None);
+
+        state.handle(Command::Confirm);
+        assert!(matches!(
+            state.handle(Command::Char('o')),
+            Some(Effect::DeleteRepositories(_))
+        ));
+    }
+
+    #[test]
+    fn enter_alone_cancels_and_keeps_the_marks() {
+        let mut state = state();
+        open_deletion(&mut state, &[]);
+        state.handle(Command::Toggle);
+        state.handle(Command::Confirm);
+
+        assert_eq!(state.handle(Command::Confirm), None);
+
+        assert!(matches!(state.screen(), Screen::DeletionList(_)));
+        assert_eq!(deletion_list(&state).marked_count(), 1);
+    }
+
+    #[test]
+    fn escape_leaves_the_deletion_list() {
+        let mut state = state();
+        open_deletion(&mut state, &[]);
+        state.handle(Command::Toggle);
+
+        state.handle(Command::Back);
+
+        assert_eq!(state.screen(), &Screen::MainMenu);
     }
 
     #[test]

@@ -17,7 +17,7 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 - [x] **3. GitHub access**: check `gh` and the `delete_repo` scope, fetch the repository list.
 - [x] **4. Main menu and scope menu**, with the language menu.
 - [x] **5. Protection list**: scrollable table of the repositories, protection toggle, saved to `config.toml`.
-- [ ] **6. Deletion list**: confirmation, deletion and log. Progress is shown as text ("Deleting repositories… 4/10") until step 7.
-  - Before testing for real, add the `delete_repo` scope to the owner's `gh` token (approved by the owner, only when needed): run `gh auth refresh -h github.com -s delete_repo` in the background and give the owner the one-time code to enter at https://github.com/login/device.
+- [x] **6. Deletion list**: confirmation, deletion and log. Progress is shown as text ("Deleting repositories… 4/10") until step 7.
+  - Real deletions are tested by the owner, in their own terminal, on a throwaway repository: only their `gh` login there has the `delete_repo` scope (`gh auth refresh -h github.com -s delete_repo`). Claude's `gh` login stays without it.
 - [ ] **7. Deletion progress bar**: replace the progress text with a `ratatui` `LineGauge` showing the percentage and the count (see `specs.md`).
 - [ ] **8. "Since last deletion" filter**: last deletion date read from the log.
