@@ -12,12 +12,13 @@ The expected volume is a few hundred repositories (around 330 today).
 - A short plain-text title only: no ASCII art banner, no emoji.
 - Colors are used sparingly, only to convey meaning (red for deletion, green for protection, gray for disabled).
 - Each screen shows a one-line key hint at the bottom (for example `↑/↓ move · Space mark · Enter delete · Esc cancel`).
-- A short message is shown while loading the repositories ("Loading repositories…") and while deleting them ("Deleting repositories… 3/10").
+- A short message is shown while waiting for GitHub ("Checking permissions…", "Loading repositories…"). Keys pressed while waiting are ignored.
 
 ## GitHub access
 
 - The application reuses the token of the GitHub CLI (`gh`).
-- Deleting repositories requires the `delete_repo` scope on that token.
+- At startup, it only checks that `gh` is installed and logged in: protecting repositories does not need any extra permission.
+- Deleting repositories requires the `delete_repo` scope on that token. It is checked when opening **Delete repositories**, so the permission to delete is only granted when it is needed.
 
 ## Navigation overview
 
@@ -41,6 +42,8 @@ When the application starts, it displays a short title and a main menu:
 2. **Delete repositories**
 3. **Language**
 4. **Quit**
+
+`Ctrl+C` exits the application cleanly from any screen.
 
 The user selects an entry with `↑` / `↓` and `Enter`. `Esc` does nothing in the main menu: the **Quit** entry exits the application. After any action completes, the application returns to this main menu.
 
@@ -148,6 +151,12 @@ The size reported by GitHub is approximate and can lag behind the latest pushes.
 ### Results
 
 - Each repository is deleted one by one.
+- While deleting, a progress bar shows the progress, with the percentage and the count:
+
+  ```
+  Deleting repositories… 4/10
+  ━━━━━━━━━━━━━━━━━━━━━━━━──────────────────────────────────── 40%
+  ```
 - The result of each deletion (success, or failure with the reason given by GitHub) is appended to a single log file, `logs/deletions.log` (see [Local files](#local-files)).
 - Each log line starts with a timestamp, so the date of the last deletion can be read back from the log.
 - The console only shows a summary, for example "3 deleted, 1 failed. See log: logs/deletions.log", then "Press any key to return to the menu".
@@ -179,7 +188,9 @@ All files are read and written relative to the **current directory**, so the app
 
 | Situation | Behavior |
 |---|---|
-| `gh` is not installed, the user is not logged in, or the `delete_repo` scope is missing | Display a clear message with the command to run (for example `gh auth refresh -s delete_repo`), then exit. |
+| `gh` is not installed or the user is not logged in, at startup | Display a clear message with the command to run (for example `gh auth login`), then exit. |
+| The `delete_repo` scope is missing, when opening **Delete repositories** | Display a clear message with the command to run (`gh auth refresh -s delete_repo`), then return to the main menu on any key. |
 | GitHub request error at startup, while checking the access (network, server, revoked token) | Display the error given by `gh`, then exit: the main menu is not shown yet. |
 | GitHub request error while loading the list (network, server, permissions) | Display the error given by `gh` and return to the main menu. |
 | Unexpected response from `gh` | Display the error and return to the main menu. |
+| `config.toml` cannot be saved (for example after changing the language) | Display the error, keep the previous settings, and return to the main menu on any key. |

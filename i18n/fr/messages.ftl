@@ -52,6 +52,7 @@ hint-deletion = ↑/↓ naviguer · Espace marquer · Entrée supprimer · Écha
 
 ## Suppression
 
+checking-access = Vérification des permissions…
 loading-repositories = Chargement des dépôts…
 no-repository-selected = Aucun dépôt sélectionné
 # $count vaut au moins 1.
@@ -78,3 +79,4 @@ error-gh-not-logged-in = Vous n'êtes pas connecté à la GitHub CLI. Lancez : 
 error-missing-delete-scope = Le token de la GitHub CLI n'a pas le scope delete_repo. Lancez : gh auth refresh -s delete_repo
 error-request = La requête à GitHub a échoué : { $details }
 error-unexpected-response = Réponse inattendue de la GitHub CLI : { $details }
+error-config-save = Impossible d'enregistrer la configuration : { $details }
