@@ -2,10 +2,11 @@
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::io;
-use std::path::Path;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use tempfile::NamedTempFile;
 use thiserror::Error;
 
 use crate::language::Language;
@@ -39,16 +40,16 @@ impl Default for Config {
 #[derive(Debug, Error)]
 pub enum ConfigError {
     #[error("cannot read {path}: {source}")]
-    Read { path: String, source: io::Error },
+    Read { path: PathBuf, source: io::Error },
     #[error("invalid configuration in {path}: {source}")]
     Parse {
-        path: String,
+        path: PathBuf,
         source: toml::de::Error,
     },
     #[error("cannot serialize the configuration: {0}")]
     Serialize(#[from] toml::ser::Error),
     #[error("cannot write {path}: {source}")]
-    Write { path: String, source: io::Error },
+    Write { path: PathBuf, source: io::Error },
 }
 
 impl Config {
@@ -62,7 +63,7 @@ impl Config {
     pub fn load_or_create(path: &Path) -> Result<Self, ConfigError> {
         match fs::read_to_string(path) {
             Ok(content) => toml::from_str(&content).map_err(|source| ConfigError::Parse {
-                path: path.display().to_string(),
+                path: path.to_path_buf(),
                 source,
             }),
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -71,13 +72,14 @@ impl Config {
                 Ok(config)
             }
             Err(source) => Err(ConfigError::Read {
-                path: path.display().to_string(),
+                path: path.to_path_buf(),
                 source,
             }),
         }
     }
 
-    /// Saves the configuration to `path`, replacing its content.
+    /// Saves the configuration to `path`, replacing its content atomically:
+    /// the file holds either the old or the new content, never a truncated one.
     ///
     /// # Errors
     ///
@@ -85,10 +87,22 @@ impl Config {
     /// cannot be written.
     pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
         let content = toml::to_string_pretty(self)?;
-        fs::write(path, content).map_err(|source| ConfigError::Write {
-            path: path.display().to_string(),
+        let write_error = |source| ConfigError::Write {
+            path: path.to_path_buf(),
             source,
-        })
+        };
+
+        // The temporary file must be in the same directory for the rename to be atomic.
+        let directory = match path.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent,
+            _ => Path::new("."),
+        };
+        let mut file = NamedTempFile::new_in(directory).map_err(write_error)?;
+        file.write_all(content.as_bytes()).map_err(write_error)?;
+        file.as_file().sync_all().map_err(write_error)?;
+        file.persist(path)
+            .map_err(|error| write_error(error.error))?;
+        Ok(())
     }
 }
 
@@ -151,6 +165,49 @@ mod tests {
         let error = Config::load_or_create(&path).unwrap_err();
 
         assert!(matches!(error, ConfigError::Parse { .. }));
+    }
+
+    #[test]
+    fn invalid_file_is_left_untouched() {
+        let dir = TempDir::new().unwrap();
+        let path = config_path(&dir);
+        let content = r#"language = "de""#;
+        fs::write(&path, content).unwrap();
+
+        Config::load_or_create(&path).unwrap_err();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), content);
+    }
+
+    #[test]
+    fn unreadable_path_is_a_read_error() {
+        let dir = TempDir::new().unwrap();
+
+        // Reading a directory fails with an error other than NotFound.
+        let error = Config::load_or_create(dir.path()).unwrap_err();
+
+        assert!(matches!(error, ConfigError::Read { .. }));
+    }
+
+    #[test]
+    fn missing_parent_directory_is_a_write_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("missing").join(CONFIG_FILE);
+
+        let error = Config::load_or_create(&path).unwrap_err();
+
+        assert!(matches!(error, ConfigError::Write { .. }));
+    }
+
+    #[test]
+    fn save_leaves_no_temporary_file() {
+        let dir = TempDir::new().unwrap();
+        let path = config_path(&dir);
+
+        Config::default().save(&path).unwrap();
+
+        let entries: Vec<_> = fs::read_dir(dir.path()).unwrap().collect();
+        assert_eq!(entries.len(), 1);
     }
 
     #[test]
