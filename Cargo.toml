@@ -1,0 +1,25 @@
+[package]
+name = "rust-repositories-cleaner"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+description = "A command-line tool to clean Rust repositories."
+authors = ["Aunim HASSAN"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aunimhsn/rust-repositories-cleaner"
+readme = "README.md"
+keywords = ["cargo", "cli", "clean", "target"]
+categories = ["command-line-utilities", "development-tools::cargo-plugins"]
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
