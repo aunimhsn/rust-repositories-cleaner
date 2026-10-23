@@ -8,6 +8,7 @@ use jiff::tz::TimeZone;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::symbols::line;
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
     Cell, HighlightSpacing, LineGauge, Paragraph, Row, Table, TableState, Wrap,
@@ -313,7 +314,7 @@ fn draw_deletion_progress(
 ) {
     let [message_area, gauge_area] =
         Layout::vertical([Constraint::Length(2), Constraint::Length(1)]).areas(area);
-    let percent = percent(done, total);
+    let percent = progress_percent(done, total);
 
     frame.render_widget(Line::from(fl!(loader, "deletion-progress")), message_area);
     frame.render_widget(
@@ -326,8 +327,8 @@ fn draw_deletion_progress(
                 total = total,
                 percent = percent
             ))
-            .filled_symbol("━")
-            .unfilled_symbol("─")
+            .filled_symbol(line::THICK_HORIZONTAL)
+            .unfilled_symbol(line::HORIZONTAL)
             .unfilled_style(Style::new().fg(Color::DarkGray)),
         gauge_area,
     );
@@ -335,7 +336,7 @@ fn draw_deletion_progress(
 
 /// Share of `done` in `total`, as a whole percentage rounded down, so that 100%
 /// is only shown when everything is done. An empty `total` counts as done.
-fn percent(done: usize, total: usize) -> u16 {
+fn progress_percent(done: usize, total: usize) -> u16 {
     if total == 0 {
         return 100;
     }
@@ -818,12 +819,31 @@ mod tests {
         let screen = render(&state, Language::English);
 
         assert!(screen.contains("Deleting repositories…"));
-        let bar = screen.lines().find(|line| line.contains("4/10")).unwrap();
+        let bar = screen
+            .lines()
+            .find(|line| line.contains("4/10"))
+            .expect("the progress bar should be drawn");
         assert!(bar.trim_start().starts_with("4/10 · 40% ━"));
         let filled = bar.matches('━').count();
         let unfilled = bar.matches('─').count();
+        // `LineGauge` rounds the filled width down, like this expected value.
         assert_eq!(filled, (filled + unfilled) * 4 / 10);
         assert!(screen.contains("Esc stop after the current repository"));
+    }
+
+    #[test]
+    fn deletion_progress_bar_is_full_when_everything_is_done() {
+        let mut state = State::new(Language::English, 'y', None);
+        state.show_deletion_progress(10, 10);
+
+        let screen = render(&state, Language::English);
+
+        let bar = screen
+            .lines()
+            .find(|line| line.contains("10/10"))
+            .expect("the progress bar should be drawn");
+        assert!(bar.contains("10/10 · 100% ━"));
+        assert!(!bar.contains('─'));
     }
 
     #[test]
@@ -838,12 +858,12 @@ mod tests {
     }
 
     #[test]
-    fn percent_is_rounded_down_and_full_only_when_done() {
-        assert_eq!(percent(0, 3), 0);
-        assert_eq!(percent(1, 3), 33);
-        assert_eq!(percent(199, 200), 99);
-        assert_eq!(percent(3, 3), 100);
-        assert_eq!(percent(0, 0), 100);
+    fn progress_percent_is_rounded_down_and_full_only_when_done() {
+        assert_eq!(progress_percent(0, 3), 0);
+        assert_eq!(progress_percent(1, 3), 33);
+        assert_eq!(progress_percent(199, 200), 99);
+        assert_eq!(progress_percent(3, 3), 100);
+        assert_eq!(progress_percent(0, 0), 100);
     }
 
     #[test]
