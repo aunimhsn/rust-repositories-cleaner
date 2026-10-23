@@ -24,12 +24,17 @@
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use jiff::{RoundMode, Timestamp, TimestampRound, Unit};
 
-/// Path of the log file, relative to the current directory.
-pub const LOG_FILE: &str = "logs/deletions.log";
+/// Path of the log file in `directory`, the application directory (see
+/// [`crate::app_directory`]). It is built part by part so that it uses the
+/// separator of the system, also when it is shown to the user.
+#[must_use]
+pub fn path_in(directory: &Path) -> PathBuf {
+    directory.join("logs").join("deletions.log")
+}
 
 /// Something to record in the log.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -405,7 +410,7 @@ mod tests {
     fn a_missing_log_has_no_session_to_close() {
         let dir = TempDir::new().unwrap();
 
-        let path = dir.path().join(LOG_FILE);
+        let path = path_in(dir.path());
 
         assert_eq!(read(&path).unwrap(), "");
         assert_eq!(
@@ -473,7 +478,7 @@ mod tests {
     #[test]
     fn open_creates_the_directory_and_appends() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join(LOG_FILE);
+        let path = path_in(dir.path());
 
         writeln!(open(&path).unwrap(), "first").unwrap();
         writeln!(open(&path).unwrap(), "second").unwrap();

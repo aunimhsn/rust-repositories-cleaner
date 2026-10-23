@@ -1,5 +1,7 @@
 # Example configuration of rust-repositories-cleaner.
-# The application creates config.toml with these default values on first run.
+# The application creates config.toml with these default values on first run,
+# in its directory (for example ~/.config/rust-repositories-cleaner on Linux,
+# see README.md).
 
 # Interface language: "en" (English) or "fr" (French).
 language = "en"

@@ -11,12 +11,16 @@ See [specs.md](specs.md) for the full specifications.
 
 ## Configuration
 
-The application reads and writes its files in the current directory, so run it from the project directory:
+The application reads and writes its files in its own directory, created on first run inside the user configuration directory of the system:
+
+| System | Directory |
+|---|---|
+| Linux | `~/.config/rust-repositories-cleaner` (or `$XDG_CONFIG_HOME/rust-repositories-cleaner`) |
+| macOS | `~/Library/Application Support/rust-repositories-cleaner` |
+| Windows | `%APPDATA%\rust-repositories-cleaner` |
 
 - `config.toml`: interface language and protected repositories, created with default values on first run. See [config.example.toml](config.example.toml) for the available options.
 - `logs/deletions.log`: history of the deletions.
-
-Both are ignored by Git.
 
 ## Keyboard shortcuts
 

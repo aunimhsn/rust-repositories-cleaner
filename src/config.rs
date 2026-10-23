@@ -11,7 +11,8 @@ use thiserror::Error;
 
 use crate::language::Language;
 
-/// Path of the configuration file, relative to the current directory.
+/// Path of the configuration file, relative to the application directory
+/// (see [`crate::app_directory`]).
 pub const CONFIG_FILE: &str = "config.toml";
 
 /// Repository protected by default on first run: this project itself.

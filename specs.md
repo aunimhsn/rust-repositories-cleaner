@@ -160,7 +160,7 @@ The size reported by GitHub is approximate and can lag behind the latest pushes.
 - Each repository is deleted one by one, and the screen shows the progress: "Deleting repositories…" above a progress bar, labeled with the number of repositories processed, the total and the percentage, for example `4/10 · 40%`.
 - `Esc` or `Ctrl + C` stops the deletions after the current repository: a deletion already sent to GitHub cannot be cancelled. The remaining repositories are left untouched.
 - A failed deletion does not stop the next ones.
-- The console only shows a summary, for example "3 deleted, 1 failed. See log: logs/deletions.log", followed by the number of repositories left untouched if the deletions were stopped, then "Press any key to return to the menu".
+- The console only shows a summary, for example "3 deleted, 1 failed. See log: ~/.config/rust-repositories-cleaner/logs/deletions.log" (the full path of the log, see [Local files](#local-files)), followed by the number of repositories left untouched if the deletions were stopped, then "Press any key to return to the menu".
 - There is no dry-run mode.
 
 ### Log
@@ -205,18 +205,35 @@ The size reported by GitHub is approximate and can lag behind the latest pushes.
 
 ## Local files
 
-All files are read and written relative to the **current directory**, so the application is meant to be run from the project directory.
+The files are read and written in the **application directory**, inside the user configuration directory of the system, so the application works wherever it is installed and launched from:
 
-| File | Content | In Git |
-|---|---|---|
-| `config.toml` | Interface language and protected repositories. Created with default values on first run. | Ignored |
-| `config.example.toml` | Documented example of `config.toml`, for anyone reusing the project. | Tracked |
-| `logs/deletions.log` | History of all deletions, appended over time. | Ignored |
+| System | Application directory |
+|---|---|
+| Linux | `$XDG_CONFIG_HOME/rust-repositories-cleaner`, by default `~/.config/rust-repositories-cleaner` |
+| macOS | `~/Library/Application Support/rust-repositories-cleaner` |
+| Windows | `%APPDATA%\rust-repositories-cleaner` |
+
+The directory is created on first run.
+
+| File | Content |
+|---|---|
+| `config.toml` | Interface language and protected repositories. Created with default values on first run. |
+| `logs/deletions.log` | History of all deletions, appended over time. |
+
+`config.example.toml`, at the root of the project, is a documented example of `config.toml`.
+
+## Distribution
+
+- Each version is published as a GitHub release, built by GitHub Actions when a version tag (for example `v0.1.0`) is pushed.
+- The release holds one archive per system: Windows (x64, `.zip`), macOS (Intel and Apple Silicon, `.tar.gz`) and Linux (x64, `.tar.gz`). Each archive contains the executable, `README.md` and the licenses.
+- No Rust toolchain is needed to run it, only the GitHub CLI (see [GitHub access](#github-access)).
+- The executables are not signed: macOS and Windows show a warning on first launch. `README.md` explains how to launch them anyway.
 
 ## Error handling
 
 | Situation | Behavior |
 |---|---|
+| The user configuration directory cannot be found, or the application directory cannot be created, at startup | Display the error, then exit. |
 | `gh` is not installed or the user is not logged in, at startup | Display a clear message with the command to run (for example `gh auth login`), then exit. |
 | The `delete_repo` scope is missing, when opening **Delete repositories** | Display a clear message with the command to run (`gh auth refresh -s delete_repo`), then return to the main menu on any key. |
 | GitHub request error at startup, while checking the access (network, server, revoked token) | Display the error given by `gh`, then exit: the main menu is not shown yet. |

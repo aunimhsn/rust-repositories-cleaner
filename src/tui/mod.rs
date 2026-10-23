@@ -20,8 +20,9 @@ use ratatui::crossterm::event::{self, Event, KeyEventKind};
 
 use self::deletion::MissingLine;
 use self::state::{Action, Effect, Scope, State};
+use crate::app_directory::LocalFiles;
 use crate::config::Config;
-use crate::deletion_log::{self, LOG_FILE};
+use crate::deletion_log;
 use crate::github::{GitHub, GitHubError};
 use crate::i18n::{self, fl, github_error_message};
 use crate::language::Language;
@@ -33,12 +34,11 @@ use crate::language::Language;
 /// Returns an error if the terminal cannot be drawn or read.
 pub fn run(
     config: Config,
-    config_path: &Path,
+    files: &LocalFiles,
     loader: FluentLanguageLoader,
     github: &GitHub,
 ) -> io::Result<()> {
-    let log_path = Path::new(LOG_FILE);
-    let log = deletion_log::read(log_path);
+    let log = deletion_log::read(&files.log);
     // The last deletion date enables the "since last deletion" scope.
     let last_deletion = log.as_deref().ok().and_then(deletion_log::last_deletion);
     let mut state = State::new(
@@ -49,10 +49,14 @@ pub fn run(
     // A deletion session cut short (application killed, terminal closed…) is
     // recorded as interrupted, and the user is told at once.
     match log
-        .and_then(|log| deletion_log::close_unfinished_session(log_path, &log, Timestamp::now()))
+        .and_then(|log| deletion_log::close_unfinished_session(&files.log, &log, Timestamp::now()))
     {
         Ok(Some(session)) => {
-            let mut message = fl!(loader, "previous-session-interrupted", path = LOG_FILE);
+            let mut message = fl!(
+                loader,
+                "previous-session-interrupted",
+                path = files.log.display().to_string()
+            );
             if let Some(repository) = session.pending {
                 message.push('\n');
                 message.push_str(&fl!(
@@ -69,7 +73,7 @@ pub fn run(
     let mut app = App {
         state,
         config,
-        config_path,
+        files,
         loader,
         github,
     };
@@ -80,7 +84,7 @@ pub fn run(
 struct App<'a> {
     state: State,
     config: Config,
-    config_path: &'a Path,
+    files: &'a LocalFiles,
     loader: FluentLanguageLoader,
     github: &'a GitHub,
 }
@@ -159,7 +163,7 @@ impl App<'_> {
     /// Deletes the repositories confirmed by the user, showing the progress,
     /// then shows the summary. `Esc` or `Ctrl + C` stops after the current one.
     fn delete(&mut self, names: &[String], terminal: &mut DefaultTerminal) {
-        let mut log = match deletion_log::open(Path::new(LOG_FILE)) {
+        let mut log = match deletion_log::open(&self.files.log) {
             Ok(log) => log,
             Err(error) => {
                 let message = fl!(self.loader, "error-log", details = error.to_string());
@@ -213,7 +217,7 @@ impl App<'_> {
             "deletion-summary",
             deleted = summary.deleted,
             failed = summary.failed,
-            path = LOG_FILE
+            path = self.files.log.display().to_string()
         ));
         if summary.not_processed > 0 {
             lines.push(fl!(
@@ -243,7 +247,7 @@ impl App<'_> {
 
     /// Saves the protected repositories. Nothing changes if saving fails.
     fn save_protections(&mut self, protected: BTreeSet<String>) {
-        match with_protections(&self.config, self.config_path, protected) {
+        match with_protections(&self.config, &self.files.config, protected) {
             Ok(config) => self.config = config,
             Err(details) => {
                 let message = fl!(self.loader, "error-config-save", details = details);
@@ -254,7 +258,7 @@ impl App<'_> {
 
     /// Applies and saves a new language. Nothing changes if it fails.
     fn change_language(&mut self, language: Language) {
-        match switch_language(&self.config, self.config_path, language) {
+        match switch_language(&self.config, &self.files.config, language) {
             Ok((config, loader)) => {
                 self.config = config;
                 self.loader = loader;
