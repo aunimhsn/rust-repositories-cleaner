@@ -1,5 +1,4 @@
 /target
 /config.toml
 /logs
-/outputs/*
-!/outputs/.gitkeep
+/outputs/
