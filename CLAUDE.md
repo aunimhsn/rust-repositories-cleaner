@@ -59,7 +59,7 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 ## Code review
 
 - Before opening any pull request that changes code (`src/`, tests, `Cargo.toml`), run the `code-reviewer` subagent (`.claude/agents/code-reviewer.md`) on the branch.
-- It writes its recommendations, in French, to `outputs/<YYYY-MM-DD>-<branch>-code-review.md`. These notes are ignored by Git.
+- It writes its recommendations, in French, to `outputs/<YYYY-MM-DD>-<branch>-code-review.md`. These notes are only for the owner's local work: the whole `outputs/` directory is ignored by Git and created when needed.
 - Summarize the recommendations to the user and apply only the ones they approve, then open the pull request.
 
 ## Development
