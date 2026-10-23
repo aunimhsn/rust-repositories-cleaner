@@ -225,7 +225,8 @@ The directory is created on first run.
 ## Distribution
 
 - Each version is published as a GitHub release, built by GitHub Actions when a version tag (for example `v0.1.0`) is pushed.
-- The release holds one archive per system: Windows (x64, `.zip`), macOS (Intel and Apple Silicon, `.tar.gz`) and Linux (x64, `.tar.gz`). Each archive contains the executable, `README.md` and the licenses.
+- The release holds one archive per system: Windows (x64, `.zip`), macOS (Intel and Apple Silicon, `.tar.gz`) and Linux (x64, `.tar.gz`). Each archive contains the executable, `README.md` and the licenses. A `SHA256SUMS.txt` file lists the checksums of the archives.
+- The release is refused if the tag does not match the version of `Cargo.toml`.
 - No Rust toolchain is needed to run it, only the GitHub CLI (see [GitHub access](#github-access)).
 - The executables are not signed: macOS and Windows show a warning on first launch. `README.md` explains how to launch them anyway.
 
