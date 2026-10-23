@@ -19,6 +19,8 @@
 //! A session that never reached `FINISHED` (the application was killed, the
 //! terminal closed…) is closed with an `INTERRUPTED` line at the next start,
 //! naming the repository whose deletion may have been cut short.
+//!
+//! The date of the last deletion is read back from the last `DELETED` line.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -155,6 +157,36 @@ pub fn unfinished_session(log: &str) -> Option<UnfinishedSession> {
         }
     }
     session
+}
+
+/// Date of the last deletion of `log`: the timestamp of its last `DELETED`
+/// line. Lines whose timestamp cannot be read, such as a line cut short, are
+/// ignored.
+#[must_use]
+pub fn last_deletion(log: &str) -> Option<Timestamp> {
+    log.lines().rev().find_map(|line| {
+        let mut words = line.split_whitespace();
+        let timestamp = words.next()?;
+        if words.next() == Some("DELETED") {
+            timestamp.parse().ok()
+        } else {
+            None
+        }
+    })
+}
+
+/// Reads the date of the last deletion from the log at `path`. A missing log
+/// has none.
+///
+/// # Errors
+///
+/// Returns an error if the log exists but cannot be read.
+pub fn read_last_deletion(path: &Path) -> io::Result<Option<Timestamp>> {
+    match fs::read_to_string(path) {
+        Ok(log) => Ok(last_deletion(&log)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 /// Closes the last session of the log at `path` with an `INTERRUPTED` line if
@@ -376,6 +408,69 @@ mod tests {
         assert_eq!(
             close_unfinished_session(&dir.path().join(LOG_FILE), timestamp()).unwrap(),
             None
+        );
+    }
+
+    #[test]
+    fn last_deletion_is_read_from_the_last_deleted_line() {
+        let log = "\
+2026-10-22T09:00:00Z STARTED 1 repositories
+2026-10-22T09:00:00Z DELETING owner/alpha
+2026-10-22T09:00:01Z DELETED owner/alpha
+2026-10-22T09:00:01Z FINISHED 1 deleted, 0 failed, 0 skipped
+2026-10-23T10:15:00Z STARTED 2 repositories
+2026-10-23T10:15:00Z DELETING owner/beta
+2026-10-23T10:15:01Z DELETED owner/beta
+2026-10-23T10:15:01Z DELETING owner/gamma
+2026-10-23T10:15:02Z FAILED owner/gamma: HTTP 403: Must have admin rights
+2026-10-23T10:15:02Z FINISHED 1 deleted, 1 failed, 0 skipped
+";
+
+        assert_eq!(last_deletion(log), "2026-10-23T10:15:01Z".parse().ok());
+    }
+
+    #[test]
+    fn a_log_without_deleted_line_has_no_last_deletion() {
+        let log = "\
+2026-10-23T10:15:00Z STARTED 1 repositories
+2026-10-23T10:15:00Z DELETING owner/alpha
+2026-10-23T10:15:01Z FAILED owner/alpha: HTTP 403: Must have admin rights
+2026-10-23T10:15:01Z FINISHED 0 deleted, 1 failed, 0 skipped
+";
+
+        assert_eq!(last_deletion(log), None);
+        assert_eq!(last_deletion(""), None);
+    }
+
+    #[test]
+    fn a_deleted_line_with_an_unreadable_date_is_ignored() {
+        let log = "\
+2026-10-22T09:00:01Z DELETED owner/alpha
+2026-10-2 DELETED owner/beta
+";
+
+        assert_eq!(last_deletion(log), "2026-10-22T09:00:01Z".parse().ok());
+    }
+
+    #[test]
+    fn a_missing_log_has_no_last_deletion() {
+        let dir = TempDir::new().unwrap();
+
+        assert_eq!(
+            read_last_deletion(&dir.path().join(LOG_FILE)).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn last_deletion_is_read_from_the_log_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("deletions.log");
+        fs::write(&path, "2026-10-22T09:00:01Z DELETED owner/alpha\n").unwrap();
+
+        assert_eq!(
+            read_last_deletion(&path).unwrap(),
+            "2026-10-22T09:00:01Z".parse().ok()
         );
     }
 

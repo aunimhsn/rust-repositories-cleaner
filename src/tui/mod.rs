@@ -37,7 +37,16 @@ pub fn run(
     loader: FluentLanguageLoader,
     github: &GitHub,
 ) -> io::Result<()> {
-    let mut state = State::new(config.language, i18n::confirmation_key(&loader), None);
+    // The last deletion date enables the "since last deletion" scope.
+    let last_deletion = deletion_log::read_last_deletion(Path::new(LOG_FILE));
+    let mut state = State::new(
+        config.language,
+        i18n::confirmation_key(&loader),
+        last_deletion.as_ref().ok().copied().flatten(),
+    );
+    if let Err(error) = last_deletion {
+        state.show_message(fl!(loader, "error-log", details = error.to_string()));
+    }
     // A deletion session cut short (application killed, terminal closed…) is
     // recorded as interrupted, and the user is told at once.
     match deletion_log::close_unfinished_session(Path::new(LOG_FILE), Timestamp::now()) {
