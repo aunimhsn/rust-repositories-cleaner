@@ -13,8 +13,29 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
+use crate::config::CONFIG_FILE;
+use crate::deletion_log;
+
 /// Name of the application directory, inside the user configuration directory.
 const NAME: &str = "rust-repositories-cleaner";
+
+/// Paths of the local files, inside the application directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalFiles {
+    /// The configuration, `config.toml`.
+    pub config: PathBuf,
+    /// The log of the deletions, `logs/deletions.log`.
+    pub log: PathBuf,
+}
+
+impl LocalFiles {
+    fn in_directory(directory: &Path) -> Self {
+        Self {
+            config: directory.join(CONFIG_FILE),
+            log: deletion_log::path_in(directory),
+        }
+    }
+}
 
 /// Error raised while finding or creating the application directory.
 #[derive(Debug, Error)]
@@ -25,25 +46,27 @@ pub enum AppDirectoryError {
     Create { path: PathBuf, source: io::Error },
 }
 
-/// Returns the application directory, creating it if needed.
+/// Creates the application directory if needed and returns the paths of the
+/// local files in it.
 ///
 /// # Errors
 ///
 /// Returns an error if the system has no user configuration directory, or if
 /// the application directory cannot be created.
-pub fn create() -> Result<PathBuf, AppDirectoryError> {
+pub fn create() -> Result<LocalFiles, AppDirectoryError> {
     let base = dirs::config_dir().ok_or(AppDirectoryError::NotFound)?;
     create_in(&base)
 }
 
-/// Returns the application directory inside `base`, creating it if needed.
-fn create_in(base: &Path) -> Result<PathBuf, AppDirectoryError> {
+/// Creates the application directory inside `base` if needed and returns the
+/// paths of the local files in it.
+fn create_in(base: &Path) -> Result<LocalFiles, AppDirectoryError> {
     let path = base.join(NAME);
     fs::create_dir_all(&path).map_err(|source| AppDirectoryError::Create {
         path: path.clone(),
         source,
     })?;
-    Ok(path)
+    Ok(LocalFiles::in_directory(&path))
 }
 
 #[cfg(test)]
@@ -56,11 +79,13 @@ mod tests {
     fn the_directory_is_created_once() {
         let base = TempDir::new().unwrap();
 
-        let path = create_in(base.path()).unwrap();
+        let files = create_in(base.path()).unwrap();
 
-        assert_eq!(path, base.path().join("rust-repositories-cleaner"));
-        assert!(path.is_dir());
-        assert_eq!(create_in(base.path()).unwrap(), path);
+        let directory = base.path().join("rust-repositories-cleaner");
+        assert!(directory.is_dir());
+        assert_eq!(files.config, directory.join("config.toml"));
+        assert_eq!(files.log, directory.join("logs").join("deletions.log"));
+        assert_eq!(create_in(base.path()).unwrap(), files);
     }
 
     #[test]
