@@ -43,11 +43,17 @@ pub fn load(language: Language) -> Result<FluentLanguageLoader, I18nEmbedError> 
     Ok(loader)
 }
 
-/// Returns whether `key` confirms the deletion, in either case.
+/// Key that confirms the deletion in the language of `loader`, in lowercase.
+///
+/// # Panics
+///
+/// Never: every language has a non-empty `confirmation-key`, which a test checks.
 #[must_use]
-pub fn confirms_deletion(loader: &FluentLanguageLoader, key: char) -> bool {
-    let confirmation_key = fl!(loader, "confirmation-key");
-    key.to_lowercase().eq(confirmation_key.chars())
+pub fn confirmation_key(loader: &FluentLanguageLoader) -> char {
+    fl!(loader, "confirmation-key")
+        .chars()
+        .next()
+        .expect("confirmation-key is not empty, which a test checks")
 }
 
 /// Translated message of a GitHub error.
@@ -304,14 +310,15 @@ mod tests {
     }
 
     #[test]
-    fn confirmation_accepts_both_cases_only() {
-        assert!(confirms_deletion(&english(), 'y'));
-        assert!(confirms_deletion(&english(), 'Y'));
-        assert!(!confirms_deletion(&english(), 'o'));
-        assert!(!confirms_deletion(&english(), 'n'));
-        assert!(confirms_deletion(&french(), 'o'));
-        assert!(confirms_deletion(&french(), 'O'));
-        assert!(!confirms_deletion(&french(), 'y'));
+    fn confirmation_key_is_one_lowercase_letter() {
+        assert_eq!(confirmation_key(&english()), 'y');
+        assert_eq!(confirmation_key(&french()), 'o');
+        for language in Language::ALL {
+            let key = fl!(load(language).unwrap(), "confirmation-key");
+
+            assert_eq!(key.chars().count(), 1, "{language:?}");
+            assert_eq!(key, key.to_lowercase(), "{language:?}");
+        }
     }
 
     #[test]

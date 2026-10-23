@@ -64,8 +64,10 @@ confirm-deletion = { $count ->
 }
 # Key that confirms the deletion, in lowercase. Also shown in the prompt above.
 confirmation-key = y
+more-repositories = … and { $count } more
 deletion-progress = Deleting repositories… { $done }/{ $total }
 deletion-summary = { $deleted } deleted, { $failed } failed. See log: { $path }
+hint-deletion-progress = Esc stop after the current repository
 press-any-key = Press any key to return to the menu
 
 ## Errors
@@ -76,3 +78,13 @@ error-missing-delete-scope = The GitHub CLI token is missing the delete_repo sco
 error-request = GitHub request failed: { $details }
 error-unexpected-response = Unexpected response from GitHub CLI: { $details }
 error-config-save = Cannot save the configuration: { $details }
+error-log = Cannot use the log file: { $details }
+deletion-untouched = { $count ->
+    [one] { $count } repository was left untouched.
+   *[other] { $count } repositories were left untouched.
+}
+log-missing-result = { $repository } was processed but its result is missing from the log: check it on GitHub.
+log-missing-end = Every repository was processed, but the end of the session could not be logged.
+log-in-use = Another instance of the application is deleting repositories. Try again once it is done.
+previous-session-interrupted = The previous deletion session was interrupted before the end. It is now marked as interrupted in { $path }.
+previous-session-pending = { $repository } was being deleted and may have been deleted: check it on GitHub.

@@ -105,6 +105,17 @@ impl GitHub {
         &self.login
     }
 
+    /// Deletes the repository `name` of the authenticated user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error with GitHub's reason if the deletion fails.
+    pub fn delete_repository(&self, name: &str) -> Result<(), GitHubError> {
+        let endpoint = format!("repos/{}/{name}", self.login);
+        successful(gh(&["api", "--method", "DELETE", &endpoint, "--silent"])?)?;
+        Ok(())
+    }
+
     /// Lists the repositories owned by the authenticated user, sorted
     /// alphabetically by name, ignoring case.
     ///

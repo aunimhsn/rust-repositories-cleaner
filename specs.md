@@ -43,7 +43,7 @@ When the application starts, it displays a short title and a main menu:
 3. **Language**
 4. **Quit**
 
-`Ctrl+C` exits the application cleanly from any screen.
+`Ctrl+C` exits the application cleanly from any screen, except while deleting: it then stops the deletions after the current repository (see [Results](#results)).
 
 The user selects an entry with `↑` / `↓` and `Enter`. `Esc` does nothing in the main menu: the **Quit** entry exits the application. After any action completes, the application returns to this main menu.
 
@@ -149,23 +149,47 @@ The size reported by GitHub is approximate and can lag behind the latest pushes.
 
 ### Confirmation
 
-- After validating, the application lists all the marked repositories, then asks: "Do you really want to delete these N repositories? [y/N]" ("Do you really want to delete this repository? [y/N]" when only one is marked).
+- After validating, the application asks the question below, followed by the names of the marked repositories, separated by commas. If they do not all fit on the screen, the last line ends with "… and N more".
+- Question: "Do you really want to delete these N repositories? [y/N]" ("Do you really want to delete this repository? [y/N]" when only one is marked).
 - The answer defaults to **No**: pressing `Enter` alone cancels the deletion.
 - The selected repositories are deleted only if the user answers `y` (`o` for "oui" in the French interface, shown as `[o/N]`), in lowercase or uppercase.
+- Any other answer, including `Enter` alone and `Esc`, returns to the deletion list with the marks kept.
 
 ### Results
 
-- Each repository is deleted one by one.
-- While deleting, a progress bar shows the progress, with the percentage and the count:
+- Each repository is deleted one by one, and the screen shows the progress.
+- `Esc` or `Ctrl + C` stops the deletions after the current repository: a deletion already sent to GitHub cannot be cancelled. The remaining repositories are left untouched.
+- A failed deletion does not stop the next ones.
+- The console only shows a summary, for example "3 deleted, 1 failed. See log: logs/deletions.log", followed by the number of repositories left untouched if the deletions were stopped, then "Press any key to return to the menu".
+- There is no dry-run mode.
+
+### Log
+
+- Every deletion session is appended to a single log file, `logs/deletions.log` (see [Local files](#local-files)), always in English.
+- Each line starts with a timestamp, truncated to the second. A session starts with `STARTED` and ends with `FINISHED`. Each repository gets a `DELETING` line before GitHub is asked to delete it, then its result, with GitHub's reason on failure. Repositories left untouched after a stop are `SKIPPED`:
 
   ```
-  Deleting repositories… 4/10
-  ━━━━━━━━━━━━━━━━━━━━━━━━──────────────────────────────────── 40%
+  2026-10-23T10:15:00Z STARTED 3 repositories
+  2026-10-23T10:15:00Z DELETING owner/first-repository
+  2026-10-23T10:15:01Z DELETED owner/first-repository
+  2026-10-23T10:15:01Z DELETING owner/second-repository
+  2026-10-23T10:15:02Z FAILED owner/second-repository: HTTP 403: Must have admin rights
+  2026-10-23T10:15:02Z SKIPPED owner/third-repository: stopped by the user
+  2026-10-23T10:15:02Z FINISHED 1 deleted, 1 failed, 1 skipped
   ```
-- The result of each deletion (success, or failure with the reason given by GitHub) is appended to a single log file, `logs/deletions.log` (see [Local files](#local-files)).
-- Each log line starts with a timestamp, so the date of the last deletion can be read back from the log.
-- The console only shows a summary, for example "3 deleted, 1 failed. See log: logs/deletions.log", then "Press any key to return to the menu".
-- There is no dry-run mode.
+
+- A session left without `FINISHED` is closed at the next start with an `INTERRUPTED` line, which names the repository whose deletion was cut short, if any:
+
+  ```
+  2026-10-23T11:00:00Z INTERRUPTED the previous session ended before FINISHED, owner/second-repository may have been deleted
+  ```
+
+- Every premature end of a session is recorded:
+  - stopped by the user: `SKIPPED` lines, then `FINISHED`;
+  - ended without `FINISHED` (application killed, terminal closed, crash): detected at the next start, which adds an `INTERRUPTED` line and tells the user, naming the repository that may have been deleted;
+  - log that cannot be written: the deletions stop at once, since every deletion must be recorded, and the screen tells what was done and which repository is missing from the log.
+- The log is locked while deleting, so that two instances of the application never write to it at the same time; a second instance cannot delete until the first one is done.
+- The date of the last deletion is read back from the last `DELETED` line.
 
 ## Feature 3: Language
 
@@ -198,4 +222,6 @@ All files are read and written relative to the **current directory**, so the app
 | GitHub request error at startup, while checking the access (network, server, revoked token) | Display the error given by `gh`, then exit: the main menu is not shown yet. |
 | GitHub request error while loading the list (network, server, permissions) | Display the error given by `gh` and return to the main menu. |
 | Unexpected response from `gh` | Display the error and return to the main menu. |
+| `logs/deletions.log` cannot be created, read or written | Before deleting: display the error and delete nothing. At startup: display the error. |
+| Another instance of the application is deleting | Display a message and delete nothing. |
 | `config.toml` cannot be saved (for example after changing the language) | Display the error, keep the previous settings, and return to the main menu on any key. |
