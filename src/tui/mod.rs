@@ -21,7 +21,7 @@ use ratatui::crossterm::event::{self, Event, KeyEventKind};
 use self::deletion::MissingLine;
 use self::state::{Action, Effect, Scope, State};
 use crate::config::Config;
-use crate::deletion_log::{self, LOG_FILE};
+use crate::deletion_log;
 use crate::github::{GitHub, GitHubError};
 use crate::i18n::{self, fl, github_error_message};
 use crate::language::Language;
@@ -34,10 +34,10 @@ use crate::language::Language;
 pub fn run(
     config: Config,
     config_path: &Path,
+    log_path: &Path,
     loader: FluentLanguageLoader,
     github: &GitHub,
 ) -> io::Result<()> {
-    let log_path = Path::new(LOG_FILE);
     let log = deletion_log::read(log_path);
     // The last deletion date enables the "since last deletion" scope.
     let last_deletion = log.as_deref().ok().and_then(deletion_log::last_deletion);
@@ -52,7 +52,11 @@ pub fn run(
         .and_then(|log| deletion_log::close_unfinished_session(log_path, &log, Timestamp::now()))
     {
         Ok(Some(session)) => {
-            let mut message = fl!(loader, "previous-session-interrupted", path = LOG_FILE);
+            let mut message = fl!(
+                loader,
+                "previous-session-interrupted",
+                path = log_path.display().to_string()
+            );
             if let Some(repository) = session.pending {
                 message.push('\n');
                 message.push_str(&fl!(
@@ -70,6 +74,7 @@ pub fn run(
         state,
         config,
         config_path,
+        log_path,
         loader,
         github,
     };
@@ -81,6 +86,7 @@ struct App<'a> {
     state: State,
     config: Config,
     config_path: &'a Path,
+    log_path: &'a Path,
     loader: FluentLanguageLoader,
     github: &'a GitHub,
 }
@@ -159,7 +165,7 @@ impl App<'_> {
     /// Deletes the repositories confirmed by the user, showing the progress,
     /// then shows the summary. `Esc` or `Ctrl + C` stops after the current one.
     fn delete(&mut self, names: &[String], terminal: &mut DefaultTerminal) {
-        let mut log = match deletion_log::open(Path::new(LOG_FILE)) {
+        let mut log = match deletion_log::open(self.log_path) {
             Ok(log) => log,
             Err(error) => {
                 let message = fl!(self.loader, "error-log", details = error.to_string());
@@ -213,7 +219,7 @@ impl App<'_> {
             "deletion-summary",
             deleted = summary.deleted,
             failed = summary.failed,
-            path = LOG_FILE
+            path = self.log_path.display().to_string()
         ));
         if summary.not_processed > 0 {
             lines.push(fl!(

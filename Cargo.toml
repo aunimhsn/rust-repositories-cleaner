@@ -12,6 +12,7 @@ keywords = ["github", "repository", "cleanup", "cli", "tui"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+dirs = "7.0.0"
 i18n-embed = { version = "0.16.0", features = ["fluent-system"] }
 i18n-embed-fl = "0.10.1"
 jiff = { version = "0.2.38", features = ["serde"] }

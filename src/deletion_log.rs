@@ -28,7 +28,8 @@ use std::path::Path;
 
 use jiff::{RoundMode, Timestamp, TimestampRound, Unit};
 
-/// Path of the log file, relative to the current directory.
+/// Path of the log file, relative to the application directory (see
+/// [`crate::app_directory`]).
 pub const LOG_FILE: &str = "logs/deletions.log";
 
 /// Something to record in the log.
