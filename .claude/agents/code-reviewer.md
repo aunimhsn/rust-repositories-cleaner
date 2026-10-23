@@ -41,38 +41,38 @@ Do not report style issues already enforced by `rustfmt` or Clippy. Do not inven
 
 Write the review to `outputs/<YYYY-MM-DD>-<branch>-code-review.md`, where `<branch>` is the current branch name with `/` replaced by `-` (for example `outputs/2026-10-22-feat-config-and-local-files-code-review.md`). If the file already exists, overwrite it.
 
-Write the review **in French**, with correct accents. Keep code identifiers and Rust terms in their original form.
+Write the review **in French**, with correct accents, including the headings and labels of the structure below, which are given in English. Keep code identifiers and Rust terms in their original form.
 
 Use this structure:
 
 ```markdown
-# Revue de code : <branch>
+# Code review: <branch>
 
-- **Date** : <YYYY-MM-DD>
-- **Commits** : <short list>
-- **Clippy** : <result>
-- **Tests** : <result>
+- **Date**: <YYYY-MM-DD>
+- **Commits**: <short list>
+- **Clippy**: <result>
+- **Tests**: <result>
 
-## Synthèse
+## Summary
 
 <2 to 4 sentences: overall quality, main strengths, main points to improve.>
 
-## Recommandations
+## Recommendations
 
 ### 1. <short title>
 
-- **Priorité** : haute | moyenne | basse
-- **Fichier** : `path/to/file.rs:line`
-- **Constat** : <what the problem is>
-- **Proposition** : <what to change, with a short code example if useful>
-- **Pourquoi** : <the Rust concept or principle behind it>
+- **Priority**: high | medium | low
+- **File**: `path/to/file.rs:line`
+- **Finding**: <what the problem is>
+- **Proposal**: <what to change, with a short code example if useful>
+- **Why**: <the Rust concept or principle behind it>
 
-## Points positifs
+## Strengths
 
 <What is well done and should be kept.>
 ```
 
-Sort recommendations by priority, highest first. If there is no recommendation, write "Aucune recommandation." under the section.
+Sort recommendations by priority, highest first. If there is no recommendation, say so under the section.
 
 ## Final answer
 
