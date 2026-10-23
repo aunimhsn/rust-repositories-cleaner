@@ -19,6 +19,8 @@
 //! A session that never reached `FINISHED` (the application was killed, the
 //! terminal closed…) is closed with an `INTERRUPTED` line at the next start,
 //! naming the repository whose deletion may have been cut short.
+//!
+//! The date of the last deletion is read back from the last `DELETED` line.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -157,25 +159,49 @@ pub fn unfinished_session(log: &str) -> Option<UnfinishedSession> {
     session
 }
 
-/// Closes the last session of the log at `path` with an `INTERRUPTED` line if
-/// it started but never ended, and returns it.
+/// Date of the last deletion of `log`: the timestamp of its last `DELETED`
+/// line. A `DELETED` line whose timestamp cannot be read is ignored.
+#[must_use]
+pub fn last_deletion(log: &str) -> Option<Timestamp> {
+    log.lines().rev().find_map(|line| {
+        let mut words = line.split_whitespace();
+        let timestamp = words.next()?;
+        if words.next() == Some("DELETED") {
+            timestamp.parse().ok()
+        } else {
+            None
+        }
+    })
+}
+
+/// Reads the log at `path`. A missing log reads as empty.
+///
+/// # Errors
+///
+/// Returns an error if the log exists but cannot be read.
+pub fn read(path: &Path) -> io::Result<String> {
+    match fs::read_to_string(path) {
+        Ok(log) => Ok(log),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(String::new()),
+        Err(error) => Err(error),
+    }
+}
+
+/// Closes the last session of `log`, the content of the log at `path`, with an
+/// `INTERRUPTED` line if it started but never ended, and returns it.
 ///
 /// Nothing is done while another instance of the application holds the log,
 /// since its session is still running.
 ///
 /// # Errors
 ///
-/// Returns an error if the log exists but cannot be read or written.
+/// Returns an error if the log cannot be written.
 pub fn close_unfinished_session(
     path: &Path,
+    log: &str,
     now: Timestamp,
 ) -> io::Result<Option<UnfinishedSession>> {
-    let log = match fs::read_to_string(path) {
-        Ok(log) => log,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error),
-    };
-    let Some(session) = unfinished_session(&log) else {
+    let Some(session) = unfinished_session(log) else {
         return Ok(None);
     };
 
@@ -334,10 +360,13 @@ mod tests {
         )
         .unwrap();
 
-        let session = close_unfinished_session(&path, timestamp()).unwrap();
+        let session = close_unfinished_session(&path, &read(&path).unwrap(), timestamp()).unwrap();
 
         assert_eq!(session.unwrap().pending.as_deref(), Some("owner/alpha"));
-        assert_eq!(close_unfinished_session(&path, timestamp()).unwrap(), None);
+        assert_eq!(
+            close_unfinished_session(&path, &read(&path).unwrap(), timestamp()).unwrap(),
+            None
+        );
     }
 
     #[test]
@@ -350,7 +379,7 @@ mod tests {
         )
         .unwrap();
 
-        close_unfinished_session(&path, timestamp()).unwrap();
+        close_unfinished_session(&path, &read(&path).unwrap(), timestamp()).unwrap();
 
         let log = fs::read_to_string(&path).unwrap();
         assert!(log.ends_with("\n2026-10-23T10:1\n2026-10-23T10:15:00Z INTERRUPTED the previous session ended before FINISHED\n"));
@@ -365,7 +394,10 @@ mod tests {
         let running = open(&path).unwrap();
         running.try_lock().unwrap();
 
-        assert_eq!(close_unfinished_session(&path, timestamp()).unwrap(), None);
+        assert_eq!(
+            close_unfinished_session(&path, &read(&path).unwrap(), timestamp()).unwrap(),
+            None
+        );
         assert!(unfinished_session(&fs::read_to_string(&path).unwrap()).is_some());
     }
 
@@ -373,10 +405,69 @@ mod tests {
     fn a_missing_log_has_no_session_to_close() {
         let dir = TempDir::new().unwrap();
 
+        let path = dir.path().join(LOG_FILE);
+
+        assert_eq!(read(&path).unwrap(), "");
         assert_eq!(
-            close_unfinished_session(&dir.path().join(LOG_FILE), timestamp()).unwrap(),
+            close_unfinished_session(&path, "", timestamp()).unwrap(),
             None
         );
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn last_deletion_is_read_from_the_last_deleted_line() {
+        let log = "\
+2026-10-22T09:00:00Z STARTED 1 repositories
+2026-10-22T09:00:00Z DELETING owner/alpha
+2026-10-22T09:00:01Z DELETED owner/alpha
+2026-10-22T09:00:01Z FINISHED 1 deleted, 0 failed, 0 skipped
+2026-10-23T10:15:00Z STARTED 2 repositories
+2026-10-23T10:15:00Z DELETING owner/beta
+2026-10-23T10:15:01Z DELETED owner/beta
+2026-10-23T10:15:01Z DELETING owner/gamma
+2026-10-23T10:15:02Z FAILED owner/gamma: HTTP 403: Must have admin rights
+2026-10-23T10:15:02Z FINISHED 1 deleted, 1 failed, 0 skipped
+";
+
+        assert_eq!(
+            last_deletion(log),
+            Some("2026-10-23T10:15:01Z".parse().unwrap())
+        );
+    }
+
+    #[test]
+    fn a_log_without_deleted_line_has_no_last_deletion() {
+        let log = "\
+2026-10-23T10:15:00Z STARTED 1 repositories
+2026-10-23T10:15:00Z DELETING owner/alpha
+2026-10-23T10:15:01Z FAILED owner/alpha: HTTP 403: Must have admin rights
+2026-10-23T10:15:01Z FINISHED 0 deleted, 1 failed, 0 skipped
+";
+
+        assert_eq!(last_deletion(log), None);
+        assert_eq!(last_deletion(""), None);
+    }
+
+    #[test]
+    fn a_deleted_line_with_an_unreadable_date_is_ignored() {
+        let log = "\
+2026-10-22T09:00:01Z DELETED owner/alpha
+2026-10-2 DELETED owner/beta
+";
+
+        assert_eq!(
+            last_deletion(log),
+            Some("2026-10-22T09:00:01Z".parse().unwrap())
+        );
+    }
+
+    #[test]
+    fn a_log_that_cannot_be_read_is_an_error() {
+        let dir = TempDir::new().unwrap();
+
+        // A directory exists but cannot be read as a file.
+        assert!(read(dir.path()).is_err());
     }
 
     #[test]

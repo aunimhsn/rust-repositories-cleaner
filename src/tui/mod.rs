@@ -37,10 +37,20 @@ pub fn run(
     loader: FluentLanguageLoader,
     github: &GitHub,
 ) -> io::Result<()> {
-    let mut state = State::new(config.language, i18n::confirmation_key(&loader), None);
+    let log_path = Path::new(LOG_FILE);
+    let log = deletion_log::read(log_path);
+    // The last deletion date enables the "since last deletion" scope.
+    let last_deletion = log.as_deref().ok().and_then(deletion_log::last_deletion);
+    let mut state = State::new(
+        config.language,
+        i18n::confirmation_key(&loader),
+        last_deletion,
+    );
     // A deletion session cut short (application killed, terminal closed…) is
     // recorded as interrupted, and the user is told at once.
-    match deletion_log::close_unfinished_session(Path::new(LOG_FILE), Timestamp::now()) {
+    match log
+        .and_then(|log| deletion_log::close_unfinished_session(log_path, &log, Timestamp::now()))
+    {
         Ok(Some(session)) => {
             let mut message = fl!(loader, "previous-session-interrupted", path = LOG_FILE);
             if let Some(repository) = session.pending {

@@ -20,4 +20,4 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 - [x] **6. Deletion list**: confirmation, deletion and log. Progress is shown as text ("Deleting repositories… 4/10") until step 7.
   - Real deletions are tested by the owner, in their own terminal, on a throwaway repository: only their `gh` login there has the `delete_repo` scope (`gh auth refresh -h github.com -s delete_repo`). Claude's `gh` login stays without it.
 - [x] **7. Deletion progress bar**: replace the progress text with a `ratatui` `LineGauge` showing the percentage and the count (see `specs.md`).
-- [ ] **8. "Since last deletion" filter**: last deletion date read from the log.
+- [x] **8. "Since last deletion" filter**: last deletion date read from the log.
