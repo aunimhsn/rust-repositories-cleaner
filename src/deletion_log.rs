@@ -160,8 +160,7 @@ pub fn unfinished_session(log: &str) -> Option<UnfinishedSession> {
 }
 
 /// Date of the last deletion of `log`: the timestamp of its last `DELETED`
-/// line. Lines whose timestamp cannot be read, such as a line cut short, are
-/// ignored.
+/// line. A `DELETED` line whose timestamp cannot be read is ignored.
 #[must_use]
 pub fn last_deletion(log: &str) -> Option<Timestamp> {
     log.lines().rev().find_map(|line| {
@@ -175,39 +174,34 @@ pub fn last_deletion(log: &str) -> Option<Timestamp> {
     })
 }
 
-/// Reads the date of the last deletion from the log at `path`. A missing log
-/// has none.
+/// Reads the log at `path`. A missing log reads as empty.
 ///
 /// # Errors
 ///
 /// Returns an error if the log exists but cannot be read.
-pub fn read_last_deletion(path: &Path) -> io::Result<Option<Timestamp>> {
+pub fn read(path: &Path) -> io::Result<String> {
     match fs::read_to_string(path) {
-        Ok(log) => Ok(last_deletion(&log)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Ok(log) => Ok(log),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(String::new()),
         Err(error) => Err(error),
     }
 }
 
-/// Closes the last session of the log at `path` with an `INTERRUPTED` line if
-/// it started but never ended, and returns it.
+/// Closes the last session of `log`, the content of the log at `path`, with an
+/// `INTERRUPTED` line if it started but never ended, and returns it.
 ///
 /// Nothing is done while another instance of the application holds the log,
 /// since its session is still running.
 ///
 /// # Errors
 ///
-/// Returns an error if the log exists but cannot be read or written.
+/// Returns an error if the log cannot be written.
 pub fn close_unfinished_session(
     path: &Path,
+    log: &str,
     now: Timestamp,
 ) -> io::Result<Option<UnfinishedSession>> {
-    let log = match fs::read_to_string(path) {
-        Ok(log) => log,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error),
-    };
-    let Some(session) = unfinished_session(&log) else {
+    let Some(session) = unfinished_session(log) else {
         return Ok(None);
     };
 
@@ -366,10 +360,13 @@ mod tests {
         )
         .unwrap();
 
-        let session = close_unfinished_session(&path, timestamp()).unwrap();
+        let session = close_unfinished_session(&path, &read(&path).unwrap(), timestamp()).unwrap();
 
         assert_eq!(session.unwrap().pending.as_deref(), Some("owner/alpha"));
-        assert_eq!(close_unfinished_session(&path, timestamp()).unwrap(), None);
+        assert_eq!(
+            close_unfinished_session(&path, &read(&path).unwrap(), timestamp()).unwrap(),
+            None
+        );
     }
 
     #[test]
@@ -382,7 +379,7 @@ mod tests {
         )
         .unwrap();
 
-        close_unfinished_session(&path, timestamp()).unwrap();
+        close_unfinished_session(&path, &read(&path).unwrap(), timestamp()).unwrap();
 
         let log = fs::read_to_string(&path).unwrap();
         assert!(log.ends_with("\n2026-10-23T10:1\n2026-10-23T10:15:00Z INTERRUPTED the previous session ended before FINISHED\n"));
@@ -397,7 +394,10 @@ mod tests {
         let running = open(&path).unwrap();
         running.try_lock().unwrap();
 
-        assert_eq!(close_unfinished_session(&path, timestamp()).unwrap(), None);
+        assert_eq!(
+            close_unfinished_session(&path, &read(&path).unwrap(), timestamp()).unwrap(),
+            None
+        );
         assert!(unfinished_session(&fs::read_to_string(&path).unwrap()).is_some());
     }
 
@@ -405,10 +405,14 @@ mod tests {
     fn a_missing_log_has_no_session_to_close() {
         let dir = TempDir::new().unwrap();
 
+        let path = dir.path().join(LOG_FILE);
+
+        assert_eq!(read(&path).unwrap(), "");
         assert_eq!(
-            close_unfinished_session(&dir.path().join(LOG_FILE), timestamp()).unwrap(),
+            close_unfinished_session(&path, "", timestamp()).unwrap(),
             None
         );
+        assert!(!path.exists());
     }
 
     #[test]
@@ -426,7 +430,10 @@ mod tests {
 2026-10-23T10:15:02Z FINISHED 1 deleted, 1 failed, 0 skipped
 ";
 
-        assert_eq!(last_deletion(log), "2026-10-23T10:15:01Z".parse().ok());
+        assert_eq!(
+            last_deletion(log),
+            Some("2026-10-23T10:15:01Z".parse().unwrap())
+        );
     }
 
     #[test]
@@ -449,29 +456,18 @@ mod tests {
 2026-10-2 DELETED owner/beta
 ";
 
-        assert_eq!(last_deletion(log), "2026-10-22T09:00:01Z".parse().ok());
-    }
-
-    #[test]
-    fn a_missing_log_has_no_last_deletion() {
-        let dir = TempDir::new().unwrap();
-
         assert_eq!(
-            read_last_deletion(&dir.path().join(LOG_FILE)).unwrap(),
-            None
+            last_deletion(log),
+            Some("2026-10-22T09:00:01Z".parse().unwrap())
         );
     }
 
     #[test]
-    fn last_deletion_is_read_from_the_log_file() {
+    fn a_log_that_cannot_be_read_is_an_error() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("deletions.log");
-        fs::write(&path, "2026-10-22T09:00:01Z DELETED owner/alpha\n").unwrap();
 
-        assert_eq!(
-            read_last_deletion(&path).unwrap(),
-            "2026-10-22T09:00:01Z".parse().ok()
-        );
+        // A directory exists but cannot be read as a file.
+        assert!(read(dir.path()).is_err());
     }
 
     #[test]
