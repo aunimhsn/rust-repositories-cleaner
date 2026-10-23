@@ -24,4 +24,4 @@ Implementation steps of the features described in [specs.md](specs.md). Each ste
 - [x] **7. Deletion progress bar**: replace the progress text with a `ratatui` `LineGauge` showing the percentage and the count (see `specs.md`).
 - [x] **8. "Since last deletion" filter**: last deletion date read from the log.
 - [x] **9. Application directory**: `config.toml` and `logs/` in the user configuration directory of the system instead of the current directory.
-- [ ] **10. Releases**: GitHub Actions workflow publishing the Windows, macOS and Linux archives when a version tag is pushed, and download instructions in `README.md`.
+- [x] **10. Releases**: GitHub Actions workflow publishing the Windows, macOS and Linux archives when a version tag is pushed, and download instructions in `README.md`.

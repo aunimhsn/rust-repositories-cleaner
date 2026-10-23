@@ -6,8 +6,31 @@ See [specs.md](specs.md) for the full specifications.
 
 ## Requirements
 
-- Rust 1.93 or later (stable toolchain, see `rust-toolchain.toml`)
 - [GitHub CLI](https://cli.github.com/) (`gh`), logged in, with the `delete_repo` scope to delete repositories. See [docs/github-cli-setup.md](docs/github-cli-setup.md) for a step-by-step setup.
+- To build from source only: Rust 1.93 or later (stable toolchain, see `rust-toolchain.toml`).
+
+## Download
+
+Download the archive of your system from the [latest release](https://github.com/aunimhsn/rust-repositories-cleaner/releases/latest), extract it, then run the executable from a terminal:
+
+| System | Archive | Run |
+|---|---|---|
+| Windows | `…-x86_64-pc-windows-msvc.zip` | `.\rust-repositories-cleaner.exe`, or double-click it |
+| macOS (Apple Silicon) | `…-aarch64-apple-darwin.tar.gz` | `./rust-repositories-cleaner` |
+| macOS (Intel) | `…-x86_64-apple-darwin.tar.gz` | `./rust-repositories-cleaner` |
+| Linux | `…-x86_64-unknown-linux-musl.tar.gz` | `./rust-repositories-cleaner` |
+
+The executables are not signed, so the first launch shows a warning:
+
+- **macOS**: "cannot be opened because the developer cannot be verified". Remove the quarantine flag once, then run it again:
+
+  ```sh
+  xattr -d com.apple.quarantine rust-repositories-cleaner
+  ```
+
+- **Windows**: "Windows protected your PC". Click **More info**, then **Run anyway**.
+
+`SHA256SUMS.txt`, in the release, lists the checksums of the archives.
 
 ## Configuration
 
@@ -39,6 +62,19 @@ The application reads and writes its files in its own directory, created on firs
 ```sh
 cargo build --release
 ```
+
+## Release
+
+1. Update `version` in `Cargo.toml` (then run `cargo build` to update `Cargo.lock`) and merge it into `main`.
+2. Tag the merged commit with the same version and push the tag:
+
+   ```sh
+   git switch main && git pull
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+The [Release workflow](.github/workflows/release.yml) builds the archives for Windows, macOS and Linux and publishes them as a GitHub release. It fails if the tag does not match the version of `Cargo.toml`.
 
 ## Development
 
