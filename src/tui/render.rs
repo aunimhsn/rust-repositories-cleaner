@@ -9,7 +9,9 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Cell, HighlightSpacing, Paragraph, Row, Table, TableState, Wrap};
+use ratatui::widgets::{
+    Cell, HighlightSpacing, LineGauge, Paragraph, Row, Table, TableState, Wrap,
+};
 
 use super::format;
 use super::list::centered_offset;
@@ -29,6 +31,7 @@ enum Body<'a> {
     ProtectionList(&'a ProtectionList),
     DeletionList(&'a DeletionList),
     ConfirmDeletion(&'a DeletionList),
+    DeletionProgress { done: usize, total: usize },
 }
 
 /// Draws the current screen of `state`.
@@ -67,12 +70,7 @@ pub fn draw(frame: &mut Frame, state: &State, loader: &FluentLanguageLoader) {
         ),
         &Screen::DeletionProgress { done, total } => (
             breadcrumb(&app_title, &fl!(loader, "menu-delete")),
-            Body::Text(Text::from(fl!(
-                loader,
-                "deletion-progress",
-                done = done,
-                total = total
-            ))),
+            Body::DeletionProgress { done, total },
             fl!(loader, "hint-deletion-progress"),
         ),
         Screen::Loading(message) => (
@@ -119,6 +117,9 @@ pub fn draw(frame: &mut Frame, state: &State, loader: &FluentLanguageLoader) {
         Body::DeletionList(deletion) => draw_deletion_list(frame, content_area, deletion, loader),
         Body::ConfirmDeletion(deletion) => {
             draw_confirm_deletion(frame, content_area, deletion, loader);
+        }
+        Body::DeletionProgress { done, total } => {
+            draw_deletion_progress(frame, content_area, done, total, loader);
         }
     }
 }
@@ -301,6 +302,45 @@ fn draw_confirm_deletion(
         lines.into_iter().map(Line::from).collect::<Text>(),
         names_area,
     );
+}
+
+fn draw_deletion_progress(
+    frame: &mut Frame,
+    area: Rect,
+    done: usize,
+    total: usize,
+    loader: &FluentLanguageLoader,
+) {
+    let [message_area, gauge_area] =
+        Layout::vertical([Constraint::Length(2), Constraint::Length(1)]).areas(area);
+    let percent = percent(done, total);
+
+    frame.render_widget(Line::from(fl!(loader, "deletion-progress")), message_area);
+    frame.render_widget(
+        LineGauge::default()
+            .ratio(f64::from(percent) / 100.0)
+            .label(fl!(
+                loader,
+                "deletion-progress-count",
+                done = done,
+                total = total,
+                percent = percent
+            ))
+            .filled_symbol("━")
+            .unfilled_symbol("─")
+            .unfilled_style(Style::new().fg(Color::DarkGray)),
+        gauge_area,
+    );
+}
+
+/// Share of `done` in `total`, as a whole percentage rounded down, so that 100%
+/// is only shown when everything is done. An empty `total` counts as done.
+fn percent(done: usize, total: usize) -> u16 {
+    if total == 0 {
+        return 100;
+    }
+    let percent = done.min(total) * 100 / total;
+    u16::try_from(percent).unwrap_or(100)
 }
 
 /// Packs `names` into lines of at most `width` characters, separated by commas.
@@ -768,6 +808,42 @@ mod tests {
             ]
         );
         assert!(lines.iter().all(|line| line.chars().count() <= 36));
+    }
+
+    #[test]
+    fn deletion_progress_shows_a_bar_with_the_count_and_the_percentage() {
+        let mut state = State::new(Language::English, 'y', None);
+        state.show_deletion_progress(4, 10);
+
+        let screen = render(&state, Language::English);
+
+        assert!(screen.contains("Deleting repositories…"));
+        let bar = screen.lines().find(|line| line.contains("4/10")).unwrap();
+        assert!(bar.trim_start().starts_with("4/10 · 40% ━"));
+        let filled = bar.matches('━').count();
+        let unfilled = bar.matches('─').count();
+        assert_eq!(filled, (filled + unfilled) * 4 / 10);
+        assert!(screen.contains("Esc stop after the current repository"));
+    }
+
+    #[test]
+    fn deletion_progress_is_translated() {
+        let mut state = State::new(Language::French, 'o', None);
+        state.show_deletion_progress(1, 3);
+
+        let screen = render(&state, Language::French);
+
+        assert!(screen.contains("Suppression des dépôts…"));
+        assert!(screen.contains("1/3 · 33\u{a0}% ━"));
+    }
+
+    #[test]
+    fn percent_is_rounded_down_and_full_only_when_done() {
+        assert_eq!(percent(0, 3), 0);
+        assert_eq!(percent(1, 3), 33);
+        assert_eq!(percent(199, 200), 99);
+        assert_eq!(percent(3, 3), 100);
+        assert_eq!(percent(0, 0), 100);
     }
 
     #[test]

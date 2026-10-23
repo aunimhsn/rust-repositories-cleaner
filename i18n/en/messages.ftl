@@ -65,7 +65,9 @@ confirm-deletion = { $count ->
 # Key that confirms the deletion, in lowercase. Also shown in the prompt above.
 confirmation-key = y
 more-repositories = … and { $count } more
-deletion-progress = Deleting repositories… { $done }/{ $total }
+deletion-progress = Deleting repositories…
+# Label of the progress bar. $percent is a whole number from 0 to 100.
+deletion-progress-count = { $done }/{ $total } · { $percent }%
 deletion-summary = { $deleted } deleted, { $failed } failed. See log: { $path }
 hint-deletion-progress = Esc stop after the current repository
 press-any-key = Press any key to return to the menu

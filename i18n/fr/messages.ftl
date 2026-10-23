@@ -1,5 +1,5 @@
 # Messages de l'interface en français.
-# Les espaces avant « ? » et « : » sont insécables (U+00A0).
+# Les espaces avant « ? », « : » et « % » sont insécables (U+00A0).
 # Chaque message doit exister dans le fichier anglais de référence.
 
 ## Titre
@@ -69,7 +69,9 @@ confirm-deletion = { $count ->
 # Touche qui confirme la suppression, en minuscule. Également affichée dans la question ci-dessus.
 confirmation-key = o
 more-repositories = … et { $count } de plus
-deletion-progress = Suppression des dépôts… { $done }/{ $total }
+deletion-progress = Suppression des dépôts…
+# Libellé de la barre de progression. $percent est un nombre entier de 0 à 100.
+deletion-progress-count = { $done }/{ $total } · { $percent } %
 deletion-summary = { $deleted ->
         [one] { $deleted } supprimé
        *[other] { $deleted } supprimés

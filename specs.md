@@ -157,7 +157,7 @@ The size reported by GitHub is approximate and can lag behind the latest pushes.
 
 ### Results
 
-- Each repository is deleted one by one, and the screen shows the progress.
+- Each repository is deleted one by one, and the screen shows the progress: "Deleting repositories…" above a progress bar, labeled with the number of repositories processed, the total and the percentage, for example `4/10 · 40%`.
 - `Esc` or `Ctrl + C` stops the deletions after the current repository: a deletion already sent to GitHub cannot be cancelled. The remaining repositories are left untouched.
 - A failed deletion does not stop the next ones.
 - The console only shows a summary, for example "3 deleted, 1 failed. See log: logs/deletions.log", followed by the number of repositories left untouched if the deletions were stopped, then "Press any key to return to the menu".
